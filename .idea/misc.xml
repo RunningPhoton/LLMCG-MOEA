@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="Black">
-    <option name="executionMode" value="BINARY" />
-    <option name="pathToExecutable" value="E:\files\ANACONDA\Scripts\black.exe" />
-    <option name="sdkUUID" value="8dd34f6b-a0eb-444e-ae89-be7e8d512f89" />
-  </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="GNNVRP" project-jdk-type="Python SDK" />
-</project>
