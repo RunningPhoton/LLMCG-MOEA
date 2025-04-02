@@ -1,0 +1,108 @@
+def next_generation(pops: {}, search_trajectory: {}, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generate the next generation using an adaptive evolutionary strategy that
+    intelligently balances exploration and exploitation based on population
+    diversity, fitness distribution, and search progress. Key components:
+    - Intelligent selection fusing fitness ranking and search trajectory
+    - Adaptive multi-operator crossover guided by diversity and convergence
+    - Self-adaptive mutation with dynamic rates based on fitness and diversity
+    - Boundary constraint handling
+    """
+    def intelligent_selection():
+        """Select parents using ranking-based selection guided by search trajectory."""
+        parents = []
+
+        # Assign selection probabilities based on fitness ranking with adaptive pressure
+        ranks = pops['rankings']
+        pressure = 2 + 2 * np.tanh(3*current_gen/max_gen - 1.5) # increase over time
+        sel_prob = (max(ranks) - ranks + 1e-6)**pressure
+        sel_prob /= np.sum(sel_prob)
+
+        # Inject guidance from search trajectory with rate based on progress
+        guide_rate = 0.1 * np.tanh(2*current_gen/max_gen)
+
+        for _ in range(POP_SIZE//2):
+            if search_trajectory['individuals'] is not None and np.random.rand() < guide_rate:
+                p1 = search_trajectory['individuals'][np.random.choice(len(search_trajectory['individuals']))]
+            else:
+                p1 = pops['individuals'][np.random.choice(len(pops['individuals']), p=sel_prob)]
+
+            if search_trajectory['individuals'] is not None and np.random.rand() < guide_rate:
+                p2 = search_trajectory['individuals'][np.random.choice(len(search_trajectory['individuals']))]
+            else:
+                p2 = pops['individuals'][np.random.choice(len(pops['individuals']), p=sel_prob)]
+
+            parents.append((p1, p2))
+
+        return parents
+
+    def adaptive_crossover(parents):
+        """Perform SBX crossover."""
+        offspring = []
+
+        # Define the distribution index for SBX
+        eta = 20
+
+        for p1, p2 in parents:
+            # Generate a random number to decide if crossover occurs
+            if np.random.rand() < 0.9:  # Crossover probability
+                # Calculate the beta distribution parameter
+                beta = (np.random.rand() * (2 - 1) + 1) ** (1 / (eta + 1))
+
+                # Perform SBX
+                c1 = 0.5 * ((1 + beta) * p1 + (1 - beta) * p2)
+                c2 = 0.5 * ((1 - beta) * p1 + (1 + beta) * p2)
+
+                offspring.append(c1)
+                offspring.append(c2)
+            else:
+                # If crossover does not occur, just copy the parents
+                offspring.append(p1)
+                offspring.append(p2)
+
+        return np.array(offspring)
+
+    def self_adaptive_mutation(offspring):
+        """Mutate offspring with self-adaptive rate and step size based on fitness and diversity."""
+        min_rate = 1/(5*N_P)
+        max_rate = 1.5/N_P
+
+        # Adapt global mutation rate based on fitness and diversity
+        rel_fitness = (max(pops['rankings']) - pops['rankings']) / max(pops['rankings'])
+        diversity = np.mean(np.std(offspring, axis=0)) / (xub - xlb).mean()
+        global_rate = min_rate + (max_rate-min_rate)*(1-rel_fitness)*(1-diversity)
+
+        # Adapt mutation step size based on convergence
+        min_step = 0.01*(xub-xlb)
+        max_step = 0.2*(xub-xlb)
+        convergence = 1 - np.std(pops['rankings']) / np.mean(pops['rankings'])
+        step_size = min_step + (max_step-min_step)*convergence
+
+        # Perform mutation with adaptive rates and step sizes
+        tau = np.random.normal(0, 0.2, len(offspring))
+        for i in range(len(offspring)):
+            rate = global_rate[i] * np.exp(tau[i])
+            mask = np.random.rand(N_P) < rate
+            step = step_size * np.exp(0.5*tau[i])
+            offspring[i][mask] += np.random.normal(0, step[mask])
+
+        return offspring
+
+    def check_bounds(offspring):
+        """Ensure offspring lie within decision variable bounds."""
+        offspring = np.clip(offspring, xlb, xub)
+        return offspring
+
+    # Intelligent selection balancing fitness, diversity and search history
+    parents = intelligent_selection()
+
+    # Multi-operator adaptive crossover guided by diversity and convergence
+    offspring = adaptive_crossover(parents)
+
+    # Self-adaptive mutation based on fitness and diversity
+    offspring = self_adaptive_mutation(offspring)
+
+    # Check boundary constraints
+    new_pop = check_bounds(offspring)
+
+    return new_pop

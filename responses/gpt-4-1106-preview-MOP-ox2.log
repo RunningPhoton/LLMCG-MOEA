@@ -1,0 +1,665 @@
+[2024-06-18 00:16:36,483][interaction.py][line:62][INFO] start
+[2024-06-18 00:18:22,971][LLM_CodeGen_OP.py][line:105][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int) -> np.ndarray:
+    """
+    Evolve a new generation of individuals for multi-objective optimization problems using intelligent evolutionary strategies.
+
+    :param pops: Current population data including 'individuals' and 'rankings'.
+    :param search_trajectory: Historical search data including 'individuals' and 'rankings'.
+    :param xlb: Lower bounds of the decision variables.
+    :param xub: Upper bounds of the decision variables.
+    :param POP_SIZE: Number of individuals in each population.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum number of generations.
+    :return: New population array with shape (POP_SIZE, N_P).
+    """
+
+    def select_parents():
+        """ Select parent individuals for crossover based on their rankings. """
+        # Combine pops and search_trajectory if available.
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            combined_individuals = pops['individuals']
+            combined_rankings = pops['rankings']
+        
+        # Select individuals based on rankings, lower rankings are better.
+        sorted_indices = np.argsort(combined_rankings)
+        selected_parents = combined_individuals[sorted_indices[:POP_SIZE]]
+        return selected_parents
+
+    def crossover(parents):
+        """ Perform crossover between parent individuals to generate offspring. """
+        np.random.shuffle(parents)
+        new_pop = np.empty((POP_SIZE, N_P))
+        
+        for i in range(0, POP_SIZE, 2):
+            if i + 1 < POP_SIZE:
+                parent1 = parents[i]
+                parent2 = parents[i + 1]
+                # Simple arithmetic crossover
+                alpha = np.random.rand()
+                new_pop[i] = alpha * parent1 + (1 - alpha) * parent2
+                new_pop[i + 1] = alpha * parent2 + (1 - alpha) * parent1
+            else:
+                # For odd number of POP_SIZE, last individual is cloned
+                new_pop[i] = parents[i]
+        
+        return new_pop
+
+    def mutate(new_pop):
+        """ Apply mutation to the offspring population. """
+        mutation_rate = 0.1
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation_vector = np.random.uniform(-1, 1, N_P)
+                new_pop[i] += mutation_vector * (xub - xlb) * 0.1  # Mutation strength is 10% of the range
+        
+        return new_pop
+
+    def check_bounds(new_pop):
+        """ Ensure the new population is within the specified bounds. """
+        np.clip(new_pop, xlb, xub, out=new_pop)
+        return new_pop
+    
+    # Subsection Selection
+    parents = select_parents()
+    
+    # Subsection Crossover
+    new_pop = crossover(parents)
+    
+    # Subsection Mutation
+    new_pop = mutate(new_pop)
+    
+    # Subsection Checking
+    new_pop = check_bounds(new_pop)
+    
+    return new_pop
+
+[2024-06-18 00:21:06,258][LLM_CodeGen_OP.py][line:105][INFO] 
+def next_generation(pops: dict, search_trajectory: dict, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    import numpy as np
+
+    def select_parents():
+        # Combine current population and search trajectory
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            combined_individuals = pops['individuals']
+            combined_rankings = pops['rankings']
+
+        # Sort by rankings
+        indices = np.argsort(combined_rankings)
+        sorted_individuals = combined_individuals[indices]
+
+        # Select top POP_SIZE individuals as parents
+        parent_individuals = sorted_individuals[:POP_SIZE]
+        return parent_individuals
+
+    def crossover(parents):
+        new_pop = np.empty((POP_SIZE, N_P))
+        num_pairs = POP_SIZE // 2
+
+        for i in range(num_pairs):
+            # Parent selection
+            parent1 = parents[2 * i]
+            parent2 = parents[2 * i + 1]
+
+            # Simple arithmetic crossover
+            alpha = np.random.rand()
+            offspring1 = alpha * parent1 + (1 - alpha) * parent2
+            offspring2 = alpha * parent2 + (1 - alpha) * parent1
+
+            new_pop[2 * i, :] = offspring1
+            new_pop[2 * i + 1, :] = offspring2
+
+        return new_pop
+
+    def mutation(population):
+        mutation_rate = 0.1
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation_strength = np.random.rand(N_P) * (xub - xlb) * 0.1
+                mutation_direction = np.random.choice([-1, 1], size=N_P)
+                population[i] += mutation_strength * mutation_direction
+
+        return population
+
+    def check_bounds(population):
+        population = np.clip(population, xlb, xub)
+        return population
+
+    # Subsection Selection
+    parents = select_parents()
+
+    # Subsection Crossover
+    new_pop = crossover(parents)
+
+    # Subsection Mutation
+    new_pop = mutation(new_pop)
+
+    # Subsection Checking
+    new_pop = check_bounds(new_pop)
+
+    return new_pop
+
+[2024-06-18 00:22:48,755][LLM_CodeGen_OP.py][line:105][INFO] 
+def next_generation(pops: dict, search_trajectory: dict, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    import numpy as np
+
+    def select_parents(pops, search_trajectory, POP_SIZE):
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+            indices = np.argsort(combined_rankings)
+            selected = combined_individuals[indices[:POP_SIZE]]
+        else:
+            selected = pops['individuals']
+        np.random.shuffle(selected)
+        return selected[:POP_SIZE//2], selected[POP_SIZE//2:POP_SIZE]
+
+    def crossover(parent1, parent2, N_P):
+        child1, child2 = np.empty(N_P), np.empty(N_P)
+        crossover_point = np.random.randint(1, N_P)
+        child1[:crossover_point], child1[crossover_point:] = parent1[:crossover_point], parent2[crossover_point:]
+        child2[:crossover_point], child2[crossover_point:] = parent2[:crossover_point], parent1[crossover_point:]
+        return child1, child2
+
+    def mutate(individual, xlb, xub):
+        mutation_strength = 0.1
+        mutation_vector = np.random.randn(*individual.shape) * mutation_strength
+        individual += mutation_vector
+        individual = np.clip(individual, xlb, xub)
+        return individual
+
+    def generate_new_pop(parents1, parents2, N_P):
+        new_pop = np.empty((POP_SIZE, N_P))
+        for i in range(POP_SIZE//2):
+            child1, child2 = crossover(parents1[i], parents2[i], N_P)
+            new_pop[2*i] = mutate(child1, xlb, xub)
+            new_pop[2*i+1] = mutate(child2, xlb, xub)
+        return new_pop
+
+    parents1, parents2 = select_parents(pops, search_trajectory, POP_SIZE)
+    new_pop = generate_new_pop(parents1, parents2, N_P)
+    return new_pop
+
+[2024-06-18 00:25:34,399][LLM_CodeGen_OP.py][line:105][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    import numpy as np
+
+    def select_parents(pops, search_trajectory):
+        """
+        Selects parent individuals from current population and search trajectory.
+        """
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            combined_individuals = pops['individuals']
+            combined_rankings = pops['rankings']
+        indices = np.argsort(combined_rankings)
+        selected_indices = indices[:POP_SIZE]  # Select best individuals based on ranking
+        return combined_individuals[selected_indices]
+
+    def crossover(parents):
+        """
+        Performs crossover between pairs of parent individuals.
+        """
+        np.random.shuffle(parents)  # Shuffle to create random pairs
+        offspring = []
+        for i in range(0, POP_SIZE, 2):
+            parent1 = parents[i]
+            parent2 = parents[i + 1]
+            cross_point = np.random.randint(1, N_P)  # Crossover point
+            child1 = np.concatenate([parent1[:cross_point], parent2[cross_point:]])
+            child2 = np.concatenate([parent2[:cross_point], parent1[cross_point:]])
+            offspring.append(child1)
+            offspring.append(child2)
+        return np.array(offspring)
+
+    def mutate(offspring):
+        """
+        Applies mutation to the offspring population.
+        """
+        mutation_rate = 0.1  # Mutation rate
+        for i in range(len(offspring)):
+            if np.random.rand() < mutation_rate:
+                mutation_point = np.random.randint(N_P)
+                offspring[i, mutation_point] = np.random.uniform(xlb[mutation_point], xub[mutation_point])
+        return offspring
+
+    def check_bounds(pop):
+        """
+        Ensures all individuals are within the specified bounds.
+        """
+        pop = np.clip(pop, xlb, xub)
+        return pop
+
+    # Subsection Selection
+    parents = select_parents(pops, search_trajectory)
+
+    # Subsection Crossover
+    new_pop = crossover(parents)
+
+    # Subsection Mutation
+    new_pop = mutate(new_pop)
+
+    # Subsection Checking
+    new_pop = check_bounds(new_pop)
+
+    return new_pop
+
+[2024-06-18 00:28:36,974][LLM_CodeGen_OP.py][line:105][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int) -> np.ndarray:
+    """
+    Evolve the next generation for a multi-objective optimization problem using an intelligent evolutionary strategy.
+    
+    :param pops: Current population and their rankings.
+    :param search_trajectory: Historical search data of populations and rankings.
+    :param xlb: Lower bounds of decision variables.
+    :param xub: Upper bounds of decision variables.
+    :param POP_SIZE: Size of the population.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation count.
+    :param max_gen: Maximum number of generations.
+    :return: New population array shaped (POP_SIZE, N_P).
+    """
+    
+    def select_parents():
+        """
+        Selects parents from the current population and search trajectory using tournament selection.
+        """
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            combined_individuals = pops['individuals']
+            combined_rankings = pops['rankings']
+        
+        parents = []
+        for _ in range(POP_SIZE):
+            idx1, idx2 = np.random.randint(0, len(combined_individuals), 2)
+            if combined_rankings[idx1] < combined_rankings[idx2]:
+                parents.append(combined_individuals[idx1])
+            else:
+                parents.append(combined_individuals[idx2])
+        
+        return np.array(parents)
+    
+    def crossover(parents):
+        """
+        Performs crossover on selected parents to create a new population.
+        """
+        np.random.shuffle(parents)
+        offspring = []
+        for i in range(0, POP_SIZE, 2):
+            p1, p2 = parents[i], parents[i+1]
+            cross_point = np.random.randint(1, N_P)
+            child1 = np.concatenate([p1[:cross_point], p2[cross_point:]])
+            child2 = np.concatenate([p2[:cross_point], p1[cross_point:]])
+            offspring.append(child1)
+            offspring.append(child2)
+        
+        return np.array(offspring)
+    
+    def mutate(offspring):
+        """
+        Applies mutation to the offspring to introduce variability.
+        """
+        mutation_rate = 0.1
+        for i in range(len(offspring)):
+            if np.random.rand() < mutation_rate:
+                mut_point = np.random.randint(0, N_P)
+                offspring[i, mut_point] = np.random.uniform(xlb[mut_point], xub[mut_point])
+        
+        return offspring
+    
+    def check_bounds(offspring):
+        """
+        Ensures all individuals are within the specified bounds.
+        """
+        np.clip(offspring, xlb, xub, out=offspring)
+        return offspring
+    
+    # Selection
+    parents = select_parents()
+    
+    # Crossover
+    new_pop = crossover(parents)
+    
+    # Mutation
+    new_pop = mutate(new_pop)
+    
+    # Checking bounds
+    new_pop = check_bounds(new_pop)
+    
+    return new_pop
+
+[2024-06-18 00:34:51,256][LLM_CodeGen_OP.py][line:105][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int) -> np.ndarray:
+    """
+    Generate the next generation of individuals for a multi-objective optimization problem using evolutionary strategies.
+
+    :param pops: Current population data structure containing 'individuals' and 'rankings'.
+    :param search_trajectory: Historical search trajectory possibly containing past populations.
+    :param xlb: Lower bounds of the decision variables.
+    :param xub: Upper bounds of the decision variables.
+    :param POP_SIZE: Size of the population.
+    :param N_P: Number of decision variables per individual.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum number of generations.
+    :return: New population as a numpy ndarray.
+    """
+
+    def select_parents():
+        # Parent selection using a combination of current population and search trajectory
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+            indices = np.argsort(combined_rankings)
+            selected_parents = combined_individuals[indices[:POP_SIZE]]
+        else:
+            selected_parents = pops['individuals']
+        return selected_parents
+
+    def crossover(parents):
+        # Crossover to generate a new population
+        np.random.shuffle(parents)
+        new_pop = []
+        for i in range(0, POP_SIZE, 2):
+            parent1 = parents[i]
+            parent2 = parents[i + 1] if i + 1 < POP_SIZE else parents[0]
+            crossover_point = np.random.randint(1, N_P)
+            offspring1 = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
+            offspring2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
+            new_pop.extend([offspring1, offspring2])
+        return np.array(new_pop[:POP_SIZE])
+
+    def mutate(new_pop):
+        # Mutation based on a simple Gaussian mutation with a decreasing mutation rate
+        mutation_rate = 0.1 * (1 - current_gen / max_gen)
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation_point = np.random.randint(N_P)
+                new_pop[i, mutation_point] += np.random.normal(0, (xub[mutation_point] - xlb[mutation_point]) * 0.1)
+        return new_pop
+
+    def check_bounds(new_pop):
+        # Ensure the new population respects the variable bounds
+        return np.clip(new_pop, xlb, xub)
+
+    # Selection
+    parents = select_parents()
+    
+    # Crossover
+    new_pop = crossover(parents)
+    
+    # Mutation
+    new_pop = mutate(new_pop)
+    
+    # Checking bounds
+    new_pop = check_bounds(new_pop)
+    
+    return new_pop
+
+[2024-06-18 00:36:34,021][LLM_CodeGen_OP.py][line:105][INFO] 
+def next_generation(pops: dict, search_trajectory: dict, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    import numpy as np
+    import random
+
+    def select_parents(pops, search_trajectory):
+        # Combine populations if search_trajectory is not None for more diverse selection
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            combined_individuals = pops['individuals']
+            combined_rankings = pops['rankings']
+
+        # Selection based on rankings, lower is better
+        sorted_indices = np.argsort(combined_rankings)
+        selected_indices = sorted_indices[:POP_SIZE]  # Select top POP_SIZE individuals
+        parent_pairs = []
+        for i in range(0, POP_SIZE, 2):
+            parent_pairs.append((combined_individuals[selected_indices[i]], combined_individuals[selected_indices[i+1]]))
+        return parent_pairs
+
+    def crossover(parents):
+        child1, child2 = np.copy(parents[0]), np.copy(parents[1])
+        crossover_point = random.randint(1, N_P-1)  # Random crossover point
+        child1[crossover_point:], child2[crossover_point:] = child2[crossover_point:], child1[crossover_point:]
+        return child1, child2
+
+    def mutation(individual):
+        mutation_rate = 0.1  # Mutation rate can be adjusted
+        for i in range(N_P):
+            if random.random() < mutation_rate:
+                individual[i] += np.random.normal(0, 1)  # Mutate by adding Gaussian noise
+        return individual
+
+    def check_and_bound(individual):
+        return np.clip(individual, xlb, xub)  # Ensure bounds are respected
+
+    # **Subsection Selection**
+    parent_pairs = select_parents(pops, search_trajectory)
+
+    # **Subsection Crossover**
+    new_pop = []
+    for parents in parent_pairs:
+        offspring1, offspring2 = crossover(parents)
+        new_pop.extend([offspring1, offspring2])
+    new_pop = np.array(new_pop)
+
+    # **Subsection Mutation**
+    new_pop = np.apply_along_axis(mutation, 1, new_pop)
+
+    # **Subsection Checking**
+    new_pop = np.apply_along_axis(check_and_bound, 1, new_pop)
+
+    return new_pop
+
+[2024-06-18 00:38:17,136][LLM_CodeGen_OP.py][line:105][INFO] 
+def next_generation(pops: dict, search_trajectory: dict, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    import numpy as np
+
+    def select_parents(pops, search_trajectory, POP_SIZE):
+        # Combining current population with search trajectory for a larger selection pool
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            combined_individuals = pops['individuals']
+            combined_rankings = pops['rankings']
+
+        # Selecting parents based on rankings
+        sorted_indices = np.argsort(combined_rankings)
+        selected_parents = combined_individuals[sorted_indices[:POP_SIZE]]
+        return selected_parents
+
+    def crossover(parents, POP_SIZE, N_P):
+        np.random.shuffle(parents)
+        new_pop = np.empty((POP_SIZE, N_P))
+
+        for i in range(0, POP_SIZE, 2):
+            p1 = parents[i % len(parents)]
+            p2 = parents[(i + 1) % len(parents)]
+            cross_point = np.random.randint(1, N_P)
+            new_pop[i] = np.concatenate([p1[:cross_point], p2[cross_point:]])
+            new_pop[i + 1] = np.concatenate([p2[:cross_point], p1[cross_point:]])
+
+        return new_pop
+
+    def mutate(new_pop, xlb, xub, mutation_rate=0.1):
+        for i in range(len(new_pop)):
+            if np.random.rand() < mutation_rate:
+                mutation_point = np.random.randint(0, N_P)
+                new_pop[i, mutation_point] = np.random.uniform(xlb[mutation_point], xub[mutation_point])
+        return new_pop
+
+    def check_bounds(new_pop, xlb, xub):
+        return np.clip(new_pop, xlb, xub)
+
+    # Subsection Selection
+    parents = select_parents(pops, search_trajectory, POP_SIZE)
+
+    # Subsection Crossover
+    new_pop = crossover(parents, POP_SIZE, N_P)
+
+    # Subsection Mutation
+    new_pop = mutate(new_pop, xlb, xub)
+
+    # Subsection Checking
+    new_pop = check_bounds(new_pop, xlb, xub)
+
+    return new_pop
+
+[2024-06-18 00:40:14,492][LLM_CodeGen_OP.py][line:105][INFO] 
+def next_generation(pops: dict, search_trajectory: dict, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    import numpy as np
+
+    def select_parents(pops, search_trajectory, POP_SIZE):
+        # Combine current population and trajectory individuals
+        if search_trajectory['individuals'] is not None:
+            all_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            all_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            all_individuals = pops['individuals']
+            all_rankings = pops['rankings']
+
+        # Sort by rankings and select the best individuals
+        sorted_indices = np.argsort(all_rankings)
+        selected_parents = all_individuals[sorted_indices[:POP_SIZE]]
+        return selected_parents
+
+    def crossover(parents, POP_SIZE, N_P):
+        np.random.shuffle(parents)
+        offspring = np.empty((POP_SIZE, N_P))
+
+        for i in range(0, POP_SIZE, 2):
+            parent1 = parents[i]
+            parent2 = parents[(i+1) % POP_SIZE]  # Ensure even index; wrap around
+
+            # Simple arithmetic crossover
+            alpha = np.random.rand(N_P)
+            offspring[i] = alpha * parent1 + (1 - alpha) * parent2
+            offspring[i+1] = alpha * parent2 + (1 - alpha) * parent1
+
+        return offspring
+
+    def mutate(offspring, xlb, xub, current_gen, max_gen):
+        mutation_rate = 0.1  # Simple fixed mutation rate
+        mutation_scale = (xub - xlb) * (1 - (current_gen / max_gen))  # Decrease over generations
+
+        for i in range(len(offspring)):
+            if np.random.rand() < mutation_rate:
+                mutation = np.random.normal(0, mutation_scale, size=N_P)
+                offspring[i] += mutation
+
+        return offspring
+
+    def check_bounds(pop, xlb, xub):
+        return np.clip(pop, xlb, xub)
+
+    # Selection
+    parents = select_parents(pops, search_trajectory, POP_SIZE)
+
+    # Crossover
+    new_pop = crossover(parents, POP_SIZE, N_P)
+
+    # Mutation
+    new_pop = mutate(new_pop, xlb, xub, current_gen, max_gen)
+
+    # Check bounds
+    new_pop = check_bounds(new_pop, xlb, xub)
+
+    return new_pop
+
+[2024-06-18 00:44:05,253][LLM_CodeGen_OP.py][line:105][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolve the population to the next generation using selection, crossover, and mutation strategies.
+    
+    :param pops: Current population data.
+    :param search_trajectory: Historical search data.
+    :param xlb: Lower bounds of decision variables.
+    :param xub: Upper bounds of decision variables.
+    :param POP_SIZE: Size of the population.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum number of generations.
+    :return: New population as a numpy.ndarray.
+    """
+    
+    def select_parents():
+        # Combine current population and trajectory individuals
+        if search_trajectory['individuals'] is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            combined_individuals = pops['individuals']
+            combined_rankings = pops['rankings']
+        
+        # Sort based on rankings
+        sorted_indices = np.argsort(combined_rankings)
+        sorted_individuals = combined_individuals[sorted_indices][:POP_SIZE]
+        
+        # Select parent pairs randomly
+        np.random.shuffle(sorted_individuals)
+        parent_pairs = sorted_individuals.reshape(-1, 2, N_P)
+        
+        return parent_pairs
+
+    def crossover(parent_pairs):
+        new_pop = np.empty((POP_SIZE, N_P))
+        
+        for i, pair in enumerate(parent_pairs):
+            # Uniform crossover
+            mask = np.random.rand(N_P) > 0.5
+            offspring1 = np.where(mask, pair[0], pair[1])
+            offspring2 = np.where(mask, pair[1], pair[0])
+            
+            # Insert offspring into new population
+            new_pop[2*i] = offspring1
+            if 2*i + 1 < POP_SIZE:
+                new_pop[2*i + 1] = offspring2
+        
+        return new_pop
+
+    def mutate(new_pop):
+        mutation_rate = 0.1
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation_point = np.random.randint(N_P)
+                new_pop[i, mutation_point] = np.random.uniform(xlb[mutation_point], xub[mutation_point])
+        
+        return new_pop
+
+    def check_and_correct(new_pop):
+        # Ensure new population respects bounds
+        np.clip(new_pop, xlb, xub, out=new_pop)
+        return new_pop
+    
+    # Process
+    parent_pairs = select_parents()
+    new_pop = crossover(parent_pairs)
+    new_pop = mutate(new_pop)
+    new_pop = check_and_correct(new_pop)
+    
+    return new_pop
+
+[2024-06-18 00:44:05,254][interaction.py][line:69][INFO] evolving-----------------------------------
+[2024-06-18 07:29:55,749][interaction.py][line:70][INFO] evolving-----------------------------------
+[2024-06-18 07:41:15,815][interaction.py][line:70][INFO] evolving-----------------------------------
+[2024-06-18 13:07:50,348][interaction.py][line:130][INFO] finish

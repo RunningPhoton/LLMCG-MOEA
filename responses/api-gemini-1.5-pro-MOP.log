@@ -1,0 +1,1003 @@
+[2024-06-14 08:36:07,975][interaction.py][line:60][INFO] start
+[2024-06-14 08:38:19,340][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    The next_generation function is to generate offspring solutions/individuals for the next generation.
+
+    Args:
+        pops (dict): current population consists of {'individuals': numpy.ndarray with shape(POP_SIZE, N_P), 'rankings': numpy.ndarray with shape(POP_SIZE,)}. Each row in pop['individuals'] represents an individual. Individuals have been sorted by rankings in ascending order, and smaller rankings indicate superior performance. rankings are gained via non-dominated sorting, where all the individuals may share the same rankings.
+        search_trajectory (dict): trajectory gained along the evolutionary search that consists of {'individuals': numpy.ndarray with shape(:, N_P) or None; 'rankings': numpy.ndarray with shape(:,) or None}, representing the latest several populations collected throughout the evolutionary search to aid in design intelligent evolutionary operators.
+        xlb (numpy.ndarray): the lower_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+        xub (numpy.ndarray): the upper_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+        POP_SIZE (int): the number of individuals in each population
+        N_P (int): the number of decision variables
+        current_gen (int): the number of current generation
+        max_gen (int): the maximum number of generations
+
+    Returns:
+        numpy.ndarray: new_pops, new population in the format of numpy.ndarray (with shape(POP_SIZE, N_P)) that may achieve superior results on the multi-objective problems.
+    """
+    def polynomial_mutation(x, xl, xu, nm=20):
+        """
+        Conduct polynomial mutation for a single decision variable.
+
+        Args:
+            x (float): a single decision variable.
+            xl (float): the lower bound for the decision variable.
+            xu (float): the upper bound for the decision variable.
+            nm (int, optional): index of polynomial mutation. Defaults to 20.
+
+        Returns:
+            float: the mutated decision variable.
+        """
+        if xl == xu:
+            return x
+        
+        eta_m = nm
+        rnd = np.random.random()
+        if rnd < 0.5:
+            delta_1 = (x-xl) / (xu-xl)
+            if rnd < 1e-6:
+                rnd = 1e-6
+            ind = (rnd)**(1/(eta_m+1))
+            new_x = x - (xu-xl) * ((1-ind)**eta_m) * delta_1
+        else:
+            delta_2 = (xu-x) / (xu-xl)
+            if 1-rnd < 1e-6:
+                rnd = 1 - 1e-6
+            ind = (1-rnd)**(1/(eta_m+1))
+            new_x = x + (xu-xl) * ((1-ind)**eta_m) * delta_2
+        
+        if new_x < xl:
+            new_x = xl
+        if new_x > xu:
+            new_x = xu
+        return new_x
+    
+    def sbx_crossover(p1, p2, xl, xu, eta_c=20):
+        """
+        Conduct simulated binary crossover for each pair of parent individuals.
+
+        Args:
+            p1 (numpy.ndarray): the first parent individual.
+            p2 (numpy.ndarray): the second parent individual.
+            xl (numpy.ndarray): the lower bound for each decision variable.
+            xu (numpy.ndarray): the upper bound for each decision variable.
+            eta_c (int, optional): index of simulated binary crossover. Defaults to 20.
+
+        Returns:
+            tuple: the generated two offspring individuals.
+        """
+        c1 = np.zeros(len(p1))
+        c2 = np.zeros(len(p1))
+        for i in range(len(p1)):
+            if np.random.random() <= 0.5:
+                if abs(p1[i]-p2[i]) > 1e-6:
+                    if p1[i] < p2[i]:
+                        p1_c = p1[i]
+                        p2_c = p2[i]
+                    else:
+                        p1_c = p2[i]
+                        p2_c = p1[i]
+                    
+                    yl = xl[i]
+                    yu = xu[i]
+                    
+                    rnd = np.random.random()
+                    if rnd < 1e-6:
+                        rnd = 1e-6
+                    elif 1-rnd < 1e-6:
+                        rnd = 1 - 1e-6
+                    
+                    beta = 1.0 + (2.0*(p1_c-yl)/(p2_c-p1_c))
+                    alpha = 2.0 - beta**(-(eta_c+1.0))
+                    
+                    if rnd <= 1.0/alpha:
+                        beta_q = (rnd*alpha)**(1.0/(eta_c+1.0))
+                    else:
+                        beta_q = (1.0/(2.0 - rnd*alpha))**(1.0/(eta_c+1.0))
+                    
+                    c1[i] = 0.5 * ((p1_c+p2_c) - beta_q*(p2_c-p1_c))
+                    
+                    beta = 1.0 + (2.0*(yu-p2_c)/(p2_c-p1_c))
+                    alpha = 2.0 - beta**(-(eta_c+1.0))
+                    
+                    if rnd <= 1.0/alpha:
+                        beta_q = (rnd*alpha)**(1.0/(eta_c+1.0))
+                    else:
+                        beta_q = (1.0/(2.0 - rnd*alpha))**(1.0/(eta_c+1.0))
+                    
+                    c2[i] = 0.5 * ((p1_c+p2_c) + beta_q*(p2_c-p1_c))
+                else:
+                    c1[i] = p1[i]
+                    c2[i] = p2[i]
+            else:
+                c1[i] = p1[i]
+                c2[i] = p2[i]
+        return c1, c2
+
+    import numpy as np
+    
+    # Conduct the next generation.
+    new_pops = np.zeros((POP_SIZE, N_P))
+    
+    # Conduct crossover.
+    for i in range(int(POP_SIZE/2)):
+        # Randomly select two parent individuals from the population.
+        index1 = np.random.randint(POP_SIZE)
+        index2 = np.random.randint(POP_SIZE)
+        p1 = pops['individuals'][index1]
+        p2 = pops['individuals'][index2]
+        # Conduct sbx crossover.
+        c1, c2 = sbx_crossover(p1, p2, xlb, xub)
+        new_pops[2*i] = c1
+        new_pops[2*i+1] = c2
+
+    # Conduct mutation.
+    for i in range(POP_SIZE):
+        for j in range(N_P):
+            # Conduct polynomial mutation.
+            new_pops[i][j] = polynomial_mutation(new_pops[i][j], xlb[j], xub[j])
+
+    return new_pops
+
+[2024-06-14 08:40:03,341][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    This function takes the current population and other parameters to generate a new population using intelligent evolutionary strategies.
+
+    Args:
+        pops (dict): Current population in format {'individuals': numpy.ndarray (POP_SIZE, N_P), 'rankings': numpy.ndarray (POP_SIZE,)}.
+        search_trajectory (dict): Trajectory of past populations {'individuals': numpy.ndarray (:, N_P) or None, 'rankings': numpy.ndarray (:,) or None}.
+        xlb (numpy.ndarray): Lower bound of decision variables (N_P,).
+        xub (numpy.ndarray): Upper bound of decision variables (N_P,).
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum generation number.
+
+    Returns:
+        numpy.ndarray: New population `new_pops` with shape (POP_SIZE, N_P).
+    """
+
+    def _tournament_selection(pop_idx, k=2):
+        """Tournament selection to choose parent indices."""
+        selected_indices = np.random.choice(len(pop_idx), size=(POP_SIZE, k), replace=True)
+        winners = np.argmin(pop_idx[selected_indices], axis=1)
+        return selected_indices[np.arange(POP_SIZE), winners]
+
+    def _sbx_crossover(parent1, parent2, eta=20):
+        """Simulated Binary Crossover."""
+        rand = np.random.rand(N_P)
+        beta = np.where(rand <= 0.5, (2 * rand) ** (1 / (eta + 1)), (1 / (2 * (1 - rand))) ** (1 / (eta + 1)))
+        offspring1 = 0.5 * ((1 + beta) * parent1 + (1 - beta) * parent2)
+        offspring2 = 0.5 * ((1 - beta) * parent1 + (1 + beta) * parent2)
+        return offspring1, offspring2
+
+    def _polynomial_mutation(individual, mut_pow=20):
+        """Polynomial mutation."""
+        rand = np.random.rand(N_P)
+        mut_val = np.where(rand <= 0.5,
+                           ((2 * rand) ** (1 / (mut_pow + 1)) - 1) * individual,
+                           (1 - (2 * (1 - rand)) ** (1 / (mut_pow + 1))) * individual)
+        return individual + mut_val
+
+    # Combine historical data if available
+    if search_trajectory['individuals'] is not None:
+        combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+        combined_rankings = np.concatenate((pops['rankings'], search_trajectory['rankings']))
+    else:
+        combined_individuals = pops['individuals']
+        combined_rankings = pops['rankings']
+
+    # Selection
+    pop_idx = np.argsort(combined_rankings)
+    parent_indices = _tournament_selection(pop_idx)
+
+    # Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1 = combined_individuals[parent_indices[i]]
+        parent2 = combined_individuals[parent_indices[i + 1]]
+        offspring1, offspring2 = _sbx_crossover(parent1, parent2)
+        new_pop.extend([offspring1, offspring2])
+    new_pop = np.array(new_pop)
+
+    # Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = _polynomial_mutation(new_pop[i])
+
+    # Ensure bounds
+    new_pop = np.clip(new_pop, xlb, xub)
+
+    return new_pop
+
+[2024-06-14 08:42:27,422][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    The function evolves the population to the next generation.
+
+    :param `pops`, current population consists of {'individuals': numpy.ndarray with shape(POP_SIZE, N_P), 'rankings': numpy.ndarray with shape(POP_SIZE,)}. Each row in pop['individuals'] represents an individual. Individuals have been sorted by rankings in ascending order, and smaller rankings indicate superior performance. rankings are gained via non-dominated sorting, where all the individuals may share the same rankings.
+    :param `search_trajectory`, trajectory gained along the evolutionary search that consists of {'individuals': numpy.ndarray with shape(:, N_P) or None; 'rankings': numpy.ndarray with shape(:,) or None}, representing the latest several populations collected throughout the evolutionary search to aid in design intelligent evolutionary operators.
+    :param `xlb`: the lower_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+    :param `xub`: the upper_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+    :param `POP_SIZE`: the number of individuals in each population
+    :param `N_P`: the number of decision variables
+    :param `current_gen`: the number of current generation
+    :param `max_gen`: the maximum number of generations
+    :return `new_pops`, new population in the format of numpy.ndarray (with shape(POP_SIZE, N_P)) that may achieve superior results on the multi-objective problems.
+    """
+
+    def _tournament_selection(pop_size: int, archive: {}) -> numpy.ndarray:
+        """
+        Select individuals from the combined population and archive using tournament selection.
+
+        :param pop_size: The number of individuals to select.
+        :param archive: The archive of previously found non-dominated solutions.
+        :return: A numpy array of indices of the selected individuals.
+        """
+        combined_pop = numpy.vstack((pops['individuals'], archive['individuals'])) if archive['individuals'] is not None else pops['individuals']
+        combined_rankings = numpy.concatenate((pops['rankings'], archive['rankings'])) if archive['rankings'] is not None else pops['rankings']
+
+        selected_indices = []
+        for _ in range(pop_size):
+            tournament = numpy.random.choice(len(combined_pop), 2, replace=False)
+            winner = tournament[0] if combined_rankings[tournament[0]] < combined_rankings[tournament[1]] else tournament[1]
+            selected_indices.append(winner)
+
+        return numpy.array(selected_indices)
+
+    def _sbx_crossover(parent1: numpy.ndarray, parent2: numpy.ndarray, crossover_rate: float = 0.9, eta_c: float = 20) -> tuple:
+        """
+        Perform Simulated Binary Crossover (SBX) on two parents.
+
+        :param parent1: The first parent individual.
+        :param parent2: The second parent individual.
+        :param crossover_rate: The probability of performing crossover.
+        :param eta_c: The distribution index for SBX.
+        :return: Two offspring individuals.
+        """
+        if numpy.random.rand() > crossover_rate:
+            return parent1, parent2
+
+        offspring1 = numpy.empty_like(parent1)
+        offspring2 = numpy.empty_like(parent2)
+
+        for i in range(len(parent1)):
+            if numpy.random.rand() <= 0.5:
+                if abs(parent1[i] - parent2[i]) > 1e-12:
+                    # Ensure parents are not identical
+                    if parent1[i] < parent2[i]:
+                        parent1[i], parent2[i] = parent2[i], parent1[i]
+
+                    u = numpy.random.rand()
+                    beta = 1 + (2 * (parent2[i] - xlb[i]) / (parent1[i] - parent2[i]))
+                    alpha = 2 - beta ** -(eta_c + 1)
+
+                    if u <= 1 / alpha:
+                        betaq = (u * alpha) ** (1 / (eta_c + 1))
+                    else:
+                        betaq = (1 / (2 - u * alpha)) ** (1 / (eta_c + 1))
+
+                    offspring1[i] = 0.5 * ((parent1[i] + parent2[i]) - betaq * (parent1[i] - parent2[i]))
+                    offspring2[i] = 0.5 * ((parent1[i] + parent2[i]) + betaq * (parent1[i] - parent2[i]))
+
+                    # Ensure offspring are within bounds
+                    offspring1[i] = min(max(offspring1[i], xlb[i]), xub[i])
+                    offspring2[i] = min(max(offspring2[i], xlb[i]), xub[i])
+                else:
+                    offspring1[i] = parent1[i]
+                    offspring2[i] = parent2[i]
+            else:
+                offspring1[i] = parent1[i]
+                offspring2[i] = parent2[i]
+
+        return offspring1, offspring2
+
+    def _polynomial_mutation(individual: numpy.ndarray, mutation_rate: float = 0.1, eta_m: float = 20) -> numpy.ndarray:
+        """
+        Perform Polynomial Mutation on an individual.
+
+        :param individual: The individual to mutate.
+        :param mutation_rate: The probability of mutating each gene.
+        :param eta_m: The distribution index for mutation.
+        :return: The mutated individual.
+        """
+        for j in range(len(individual)):
+            if numpy.random.rand() <= mutation_rate:
+                u = numpy.random.rand()
+                if u < 0.5:
+                    delta = (2 * u) ** (1 / (eta_m + 1)) - 1
+                    individual[j] = individual[j] + delta * (individual[j] - xlb[j])
+                else:
+                    delta = 1 - (2 * (1 - u)) ** (1 / (eta_m + 1))
+                    individual[j] = individual[j] + delta * (xub[j] - individual[j])
+
+                # Ensure individual is within bounds after mutation
+                individual[j] = min(max(individual[j], xlb[j]), xub[j])
+        return individual
+
+    # **Subsection Selection**: First of all, pair the parent individuals---potentially selected from both the populations and the search trajectory---for intelligent crossover. This may produce POP_SIZE/2 pairs of parent individuals.
+    selected_indices = _tournament_selection(POP_SIZE, search_trajectory)
+    selected_parents = numpy.array([pops['individuals'][i] if i < POP_SIZE else search_trajectory['individuals'][i - POP_SIZE] for i in selected_indices])
+
+    # **Subsection Crossover**: Secondly, conduct intelligent crossover between each pair of parent individuals based on the innovative search strategies, generate two offspring individuals for each pair, and thus obtain a new population `new_pop` with shape (POP_SIZE, N_P) that may achieve superior performance in optimization.
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1 = selected_parents[i]
+        parent2 = selected_parents[i + 1]
+        offspring1, offspring2 = _sbx_crossover(parent1, parent2)
+        new_pop.extend([offspring1, offspring2])
+    new_pop = numpy.array(new_pop)
+
+    # **Subsection Mutation**: Thirdly, fine-tune the `new_pop` gained from Crossover by harnessing the innovative search strategies, and return the modified population `new_pop` using numpy.ndarray with shape(POP_SIZE, N_P).
+    for i in range(POP_SIZE):
+        new_pop[i] = _polynomial_mutation(new_pop[i])
+
+    # **Subsection Checking**: Ensure that the decision variable values in `new_pop` are within the `xlb` lower bounds and `xub` upper bounds before returning it.
+    new_pop = numpy.clip(new_pop, xlb, xub)
+
+    return new_pop
+
+[2024-06-14 08:48:09,374][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    The next_generation function evolves a new population from the current population using an intelligent evolutionary algorithm.
+
+    Args:
+        pops (dict): Current population in the format {'individuals': numpy.ndarray, 'rankings': numpy.ndarray}.
+        search_trajectory (dict): Search trajectory in the format {'individuals': numpy.ndarray or None, 'rankings': numpy.ndarray or None}.
+        xlb (numpy.ndarray): Lower bounds of decision variables.
+        xub (numpy.ndarray): Upper bounds of decision variables.
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum number of generations.
+
+    Returns:
+        numpy.ndarray: New population with shape (POP_SIZE, N_P).
+    """
+    
+    def _tournament_selection(pop_size, tournament_size=2):
+        """
+        Tournament selection for parent selection. Selects the best individual from a random subset of the population.
+
+        Args:
+            pop_size (int): Size of the population.
+            tournament_size (int, optional): Size of the tournament. Defaults to 2.
+
+        Returns:
+            numpy.ndarray: Indices of selected parents.
+        """
+        selected_indices = []
+        for _ in range(pop_size):
+            tournament = np.random.choice(pop_size, size=tournament_size, replace=False)
+            best_index = tournament[np.argmin(pops['rankings'][tournament])]
+            selected_indices.append(best_index)
+        return np.array(selected_indices)
+    
+    def _sbx_crossover(parent1, parent2, crossover_probability=0.9, eta_c=15):
+        """
+        Simulated Binary Crossover (SBX) operator.
+
+        Args:
+            parent1 (numpy.ndarray): First parent individual.
+            parent2 (numpy.ndarray): Second parent individual.
+            crossover_probability (float, optional): Probability of crossover. Defaults to 0.9.
+            eta_c (float, optional): Distribution index for SBX. Defaults to 15.
+
+        Returns:
+            tuple: Two offspring individuals.
+        """
+        if np.random.rand() <= crossover_probability:
+            # Apply SBX crossover
+            u = np.random.rand()
+            if u <= 0.5:
+                beta = (2 * u) ** (1 / (eta_c + 1))
+            else:
+                beta = (1 / (2 * (1 - u))) ** (1 / (eta_c + 1))
+            offspring1 = 0.5 * ((1 + beta) * parent1 + (1 - beta) * parent2)
+            offspring2 = 0.5 * ((1 - beta) * parent1 + (1 + beta) * parent2)
+        else:
+            offspring1, offspring2 = parent1.copy(), parent2.copy()
+        return offspring1, offspring2
+
+    def _polynomial_mutation(individual, mutation_probability=1/N_P, eta_m=20):
+        """
+        Polynomial mutation operator.
+
+        Args:
+            individual (numpy.ndarray): Individual to be mutated.
+            mutation_probability (float, optional): Probability of mutation. Defaults to 1/N_P.
+            eta_m (float, optional): Distribution index for mutation. Defaults to 20.
+
+        Returns:
+            numpy.ndarray: Mutated individual.
+        """
+        mutated_individual = individual.copy()
+        for j in range(N_P):
+            if np.random.rand() <= mutation_probability:
+                u = np.random.rand()
+                if u <= 0.5:
+                    delta = (2 * u) ** (1 / (eta_m + 1)) - 1
+                else:
+                    delta = 1 - (2 * (1 - u)) ** (1 / (eta_m + 1))
+                mutated_individual[j] = individual[j] + (xub[j] - xlb[j]) * delta
+        return mutated_individual
+    
+    new_pop = np.zeros((POP_SIZE, N_P))
+    
+    # Selection
+    selected_indices = _tournament_selection(POP_SIZE)
+    parents = pops['individuals'][selected_indices]
+    
+    # Crossover
+    for i in range(0, POP_SIZE, 2):
+        parent1, parent2 = parents[i], parents[i+1]
+        offspring1, offspring2 = _sbx_crossover(parent1, parent2)
+        new_pop[i] = offspring1
+        new_pop[i+1] = offspring2
+    
+    # Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = _polynomial_mutation(new_pop[i])
+        
+    # Ensure decision variables within bounds
+    new_pop = np.clip(new_pop, xlb, xub)
+    
+    return new_pop
+
+[2024-06-14 08:50:05,194][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    The function evolves the population to the next generation.
+
+    :param `pops`, current population consists of {'individuals': numpy.ndarray with shape(POP_SIZE, N_P), 'rankings': numpy.ndarray with shape(POP_SIZE,)}. Each row in pop['individuals'] represents an individual. Individuals have been sorted by rankings in ascending order, and smaller rankings indicate superior performance. rankings are gained via non-dominated sorting, where all the individuals may share the same rankings.
+    :param `search_trajectory`, trajectory gained along the evolutionary search that consists of {'individuals': numpy.ndarray with shape(:, N_P) or None; 'rankings': numpy.ndarray with shape(:,) or None}, representing the latest several populations collected throughout the evolutionary search to aid in design intelligent evolutionary operators.
+    :param `xlb`: the lower_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+    :param `xub`: the upper_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+    :param `POP_SIZE`: the number of individuals in each population
+    :param `N_P`: the number of decision variables
+    :param `current_gen`: the number of current generation
+    :param `max_gen`: the maximum number of generations
+    :return `new_pops`, new population in the format of numpy.ndarray (with shape(POP_SIZE, N_P)) that may achieve superior results on the multi-objective problems.
+    """
+
+    def sbx_crossover(p1: numpy.ndarray, p2: numpy.ndarray, lb: numpy.ndarray, ub: numpy.ndarray) -> numpy.ndarray:
+        """
+        The function implements the simulated binary crossover (SBX) operator.
+
+        :param p1: the first parent individual
+        :param p2: the second parent individual
+        :param lb: the lower bounds of decision variables
+        :param ub: the upper bounds of decision variables
+        :return: two offspring individuals
+        """
+        # Initialization
+        off1 = np.zeros(N_P)
+        off2 = np.zeros(N_P)
+
+        # Crossover for each decision variable
+        for i in range(N_P):
+            # Parameters for SBX
+            u = np.random.rand()
+            if u <= 0.5:
+                beta = (2 * u) ** (1 / (eta_c + 1))
+            else:
+                beta = (1 / (2 * (1 - u))) ** (1 / (eta_c + 1))
+
+            # Offspring generation
+            off1[i] = 0.5 * ((1 + beta) * p1[i] + (1 - beta) * p2[i])
+            off2[i] = 0.5 * ((1 - beta) * p1[i] + (1 + beta) * p2[i])
+
+            # Boundary handling
+            off1[i] = min(max(off1[i], lb[i]), ub[i])
+            off2[i] = min(max(off2[i], lb[i]), ub[i])
+
+        return off1, off2
+
+    def polynomial_mutation(ind: numpy.ndarray, lb: numpy.ndarray, ub: numpy.ndarray) -> numpy.ndarray:
+        """
+        The function implements the polynomial mutation operator.
+
+        :param ind: the individual to be mutated
+        :param lb: the lower bounds of decision variables
+        :param ub: the upper bounds of decision variables
+        :return: the mutated individual
+        """
+        # Mutation for each decision variable
+        for i in range(N_P):
+            # Polynomial mutation
+            if np.random.rand() <= prob_m:
+                u = np.random.rand()
+                if u < 0.5:
+                    delta = (2 * u) ** (1 / (eta_m + 1)) - 1
+                else:
+                    delta = 1 - (2 * (1 - u)) ** (1 / (eta_m + 1))
+                ind[i] = ind[i] + (ub[i] - lb[i]) * delta
+
+                # Boundary handling
+                ind[i] = min(max(ind[i], lb[i]), ub[i])
+
+        return ind
+
+    # Parameters for SBX and polynomial mutation
+    eta_c = 20
+    eta_m = 20
+    prob_m = 1 / N_P
+
+    # Initialization
+    new_pop = np.zeros((POP_SIZE, N_P))
+
+    # **Subsection Selection**: First of all, pair the parent individuals---potentially selected from both the populations and the search trajectory---for intelligent crossover. This may produce POP_SIZE/2 pairs of parent individuals.
+    # Randomly select half of the population as parents
+    parent_indices = np.random.choice(POP_SIZE, size=POP_SIZE // 2, replace=False)
+    parents = pops['individuals'][parent_indices]
+
+    # **Subsection Crossover**: Secondly, conduct intelligent crossover between each pair of parent individuals based on the innovative search strategies, generate two offspring individuals for each pair, and thus obtain a new population `new_pop` with shape (POP_SIZE, N_P) that may achieve superior performance in optimization.
+    # Apply SBX crossover to generate offspring
+    for i in range(POP_SIZE // 2):
+        # Get parent individuals
+        p1 = parents[i]
+        p2 = parents[i + 1 - (i + 1) // (POP_SIZE // 2) * (POP_SIZE // 2)]  # Select the next parent in a circular manner
+
+        # Generate offspring individuals using SBX crossover
+        off1, off2 = sbx_crossover(p1, p2, xlb, xub)
+
+        # Add the offspring individuals to the new population
+        new_pop[2 * i] = off1
+        new_pop[2 * i + 1] = off2
+
+    # **Subsection Mutation**: Thirdly, fine-tune the `new_pop` gained from Crossover by harnessing the innovative search strategies, and return the modified population `new_pop` using numpy.ndarray with shape(POP_SIZE, N_P).
+    # Apply polynomial mutation to the offspring
+    for i in range(POP_SIZE):
+        new_pop[i] = polynomial_mutation(new_pop[i], xlb, xub)
+
+    # **Subsection Checking**: Ensure that the decision variable values in `new_pop` are within the `xlb` lower bounds and `xub` upper bounds before returning it.
+    new_pop = np.clip(new_pop, xlb, xub)
+
+    return new_pop
+
+[2024-06-14 08:52:03,590][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    The next_generation function is to generate offspring solutions based on current population and historical information.
+
+    Args:
+        pops: current population consists of {'individuals': numpy.ndarray with shape(POP_SIZE, N_P), 'rankings': numpy.ndarray with shape(POP_SIZE,)}, where each row in pop['individuals'] represents an individual, and individuals have been sorted by rankings in ascending order and smaller rankings indicate superior performance, rankings are gained via non-dominated sorting, where all the individuals may share the same rankings.
+        search_trajectory (dict): trajectory gained along the evolutionary search that consists of {'individuals': numpy.ndarray with shape(:, N_P) or None; 'rankings': numpy.ndarray with shape(:,) or None}, representing the latest several populations collected throughout the evolutionary search to aid in design intelligent evolutionary operators.
+        xlb (numpy.ndarray): the lower_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,).
+        xub (numpy.ndarray): the upper_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,).
+        POP_SIZE (int): the number of individuals in each population.
+        N_P (int): the number of decision variables.
+        current_gen (int): the number of current generation.
+        max_gen (int): the maximum number of generations.
+
+    Returns:
+        numpy.ndarray: new population in the format of numpy.ndarray (with shape(POP_SIZE, N_P)) that may achieve superior results on the multi-objective problems.
+    """
+    def tournament_selection(pop, k=2):
+        """Tournament selection to choose individuals for crossover.
+
+        Args:
+            pop (dict): The population from which to select parents.
+            k (int, optional): Tournament size. Defaults to 2.
+
+        Returns:
+            numpy.ndarray: The indices of selected parents.
+        """
+        selected_indices = []
+        for _ in range(POP_SIZE):
+            tournament = np.random.choice(POP_SIZE, size=k, replace=False)
+            best_index = tournament[np.argmin(pop['rankings'][tournament])]
+            selected_indices.append(best_index)
+        return np.array(selected_indices)
+
+    def sbx_crossover(parent1, parent2, eta_c=20):
+        """Simulated binary crossover (SBX) operator.
+
+        Args:
+            parent1 (numpy.ndarray): The first parent individual.
+            parent2 (numpy.ndarray): The second parent individual.
+            eta_c (int, optional): The distribution index for SBX. Defaults to 20.
+
+        Returns:
+            tuple: Two offspring individuals generated by SBX.
+        """
+        u = np.random.rand(N_P)
+        beta = np.where(u <= 0.5, (2 * u) ** (1 / (eta_c + 1)), (1 / (2 * (1 - u))) ** (1 / (eta_c + 1)))
+        offspring1 = 0.5 * ((1 + beta) * parent1 + (1 - beta) * parent2)
+        offspring2 = 0.5 * ((1 - beta) * parent1 + (1 + beta) * parent2)
+        return offspring1, offspring2
+
+    def polynomial_mutation(individual, eta_m=20):
+        """Polynomial mutation operator.
+
+        Args:
+            individual (numpy.ndarray): The individual to mutate.
+            eta_m (int, optional): The distribution index for polynomial mutation. Defaults to 20.
+
+        Returns:
+            numpy.ndarray: The mutated individual.
+        """
+        u = np.random.rand(N_P)
+        r = np.where(u < 0.5, (2 * u) ** (1 / (eta_m + 1)) - 1, 1 - (2 * (1 - u)) ** (1 / (eta_m + 1)))
+        mutated_individual = individual + (xub - xlb) * r
+        return mutated_individual
+
+    # Combine current population and search trajectory for parent selection
+    combined_pop = pops.copy()
+    if search_trajectory['individuals'] is not None:
+        combined_pop['individuals'] = np.vstack([combined_pop['individuals'], search_trajectory['individuals']])
+        combined_pop['rankings'] = np.concatenate([combined_pop['rankings'], search_trajectory['rankings']])
+
+    # **Subsection Selection**: First of all, pair the parent individuals---potentially selected from both the populations and the search trajectory---for intelligent crossover. This may produce POP_SIZE/2 pairs of parent individuals.
+    parent_indices = tournament_selection(combined_pop)
+    parents = combined_pop['individuals'][parent_indices]
+    
+    # **Subsection Crossover**: Secondly, conduct intelligent crossover between each pair of parent individuals based on the innovative search strategies, generate two offspring individuals for each pair, and thus obtain a new population `new_pop` with shape (POP_SIZE, N_P) that may achieve superior performance in optimization.
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        offspring1, offspring2 = sbx_crossover(parents[i], parents[i + 1])
+        new_pop.extend([offspring1, offspring2])
+    new_pop = np.array(new_pop)
+
+    # **Subsection Mutation**: Thirdly, fine-tune the `new_pop` gained from Crossover by harnessing the innovative search strategies, and return the modified population `new_pop` using numpy.ndarray with shape(POP_SIZE, N_P).
+    for i in range(POP_SIZE):
+        new_pop[i] = polynomial_mutation(new_pop[i])
+
+    # **Subsection Checking**: Ensure that the decision variable values in `new_pop` are within the `xlb` lower bounds and `xub` upper bounds before returning it.
+    new_pop = np.clip(new_pop, xlb, xub)
+    return new_pop
+
+[2024-06-14 08:53:57,633][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    This function aims to evolve a superior evolutionary operator for tackling multi-objective problems, with the goal of achieving top search performance across multi-objective problems.
+
+    :param pops: current population consists of {'individuals': numpy.ndarray with shape(POP_SIZE, N_P), 'rankings': numpy.ndarray with shape(POP_SIZE,)}, representing the individuals and their rankings, respectively. Individuals have been sorted by rankings in ascending order, and smaller rankings indicate superior performance.
+    :param search_trajectory: trajectory gained along the evolutionary search that consists of {'individuals': numpy.ndarray with shape(:, N_P) or None; 'rankings': numpy.ndarray with shape(:,) or None}, representing the latest several populations collected throughout the evolutionary search to aid in design intelligent evolutionary operators.
+    :param xlb: the lower_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+    :param xub: the upper_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+    :param POP_SIZE: the number of individuals in each population
+    :param N_P: the number of decision variables
+    :param current_gen: the number of current generation
+    :param max_gen: the maximum number of generations
+    :return: new_pops, new population in the format of numpy.ndarray (with shape(POP_SIZE, N_P)) that may achieve superior results on the multi-objective problems.
+    """
+
+    def sbx_crossover(parent1, parent2, sbx_eta=15):
+        """
+        Simulated binary crossover (SBX)
+        """
+        child1 = np.empty_like(parent1)
+        child2 = np.empty_like(parent2)
+        for i in range(len(parent1)):
+            if random.random() < 0.5:
+                if abs(parent1[i] - parent2[i]) > 1e-10:
+                    if parent1[i] < parent2[i]:
+                        x1 = parent1[i]
+                        x2 = parent2[i]
+                    else:
+                        x1 = parent2[i]
+                        x2 = parent1[i]
+                    rand = random.random()
+                    beta = 1.0 + (2.0 * (x1 - xlb[i]) / (x2 - x1))
+                    alpha = 2.0 - beta ** (-(sbx_eta + 1.0))
+                    if rand <= (1.0 / alpha):
+                        betaq = (rand * alpha) ** (1.0 / (sbx_eta + 1.0))
+                    else:
+                        betaq = (1.0 / (2.0 - rand * alpha)) ** (1.0 / (sbx_eta + 1.0))
+                    child1[i] = 0.5 * ((x1 + x2) - betaq * (x2 - x1))
+                    child2[i] = 0.5 * ((x1 + x2) + betaq * (x2 - x1))
+                else:
+                    child1[i] = parent1[i]
+                    child2[i] = parent2[i]
+            else:
+                child1[i] = parent1[i]
+                child2[i] = parent2[i]
+        return child1, child2
+
+    def polynomial_mutation(individual, pm=1/N_P, pm_eta=20):
+        """
+        Polynomial mutation
+        """
+        mutant = individual.copy()
+        for j in range(len(mutant)):
+            if random.random() < pm:
+                u = random.random()
+                if u <= 0.5:
+                    delta = (2 * u) ** (1 / (pm_eta + 1)) - 1
+                    mutant[j] = mutant[j] + delta * (mutant[j] - xlb[j])
+                else:
+                    delta = 1 - (2 * (1 - u)) ** (1 / (pm_eta + 1))
+                    mutant[j] = mutant[j] + delta * (xub[j] - mutant[j])
+        return mutant
+
+
+    # *Subsection Selection*: First of all, pair the parent individuals---potentially selected from both the populations and the search trajectory---for intelligent crossover. This may produce POP_SIZE/2 pairs of parent individuals.
+    
+    selected_parents_idxs = np.arange(int(POP_SIZE/2))
+    selected_parents = pops['individuals'][selected_parents_idxs]
+
+    
+    # *Subsection Crossover*: Secondly, conduct intelligent crossover between each pair of parent individuals based on the innovative search strategies, generate two offspring individuals for each pair, and thus obtain a new population `new_pop` with shape (POP_SIZE, N_P) that may achieve superior performance in optimization.
+
+    new_pop = []
+    for i in range(int(POP_SIZE/2)):
+        parent1 = selected_parents[i]
+        parent2 = selected_parents[-(i+1)]
+        child1, child2 = sbx_crossover(parent1, parent2)
+        new_pop.append(child1)
+        new_pop.append(child2)
+    new_pop = np.array(new_pop)
+
+    
+    # *Subsection Mutation*: Thirdly, fine-tune the `new_pop` gained from Crossover by harnessing the innovative search strategies, and return the modified population `new_pop` using numpy.ndarray with shape(POP_SIZE, N_P).
+
+    for i in range(POP_SIZE):
+        new_pop[i] = polynomial_mutation(new_pop[i])
+
+
+    # *Subsection Checking*: Ensure that the decision variable values in `new_pop` are within the `xlb` lower bounds and `xub` upper bounds before returning it.
+
+    for i in range(POP_SIZE):
+        for j in range(N_P):
+            if new_pop[i][j] < xlb[j]:
+                new_pop[i][j] = xlb[j]
+            if new_pop[i][j] > xub[j]:
+                new_pop[i][j] = xub[j]
+
+    return new_pop
+
+[2024-06-14 08:55:48,615][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    The function evolves the population for a generation.
+
+    :param pops: Current population and their rankings.
+    :param search_trajectory: Historical population data.
+    :param xlb: Lower bounds for decision variables.
+    :param xub: Upper bounds for decision variables.
+    :param POP_SIZE: Population size.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum number of generations.
+    :return: New population after evolution.
+    """
+
+    def sbx_crossover(parent1, parent2, sbx_eta=15):
+        """
+        Simulated Binary Crossover (SBX) operation.
+
+        :param parent1: First parent individual.
+        :param parent2: Second parent individual.
+        :param sbx_eta: Spread factor for SBX.
+        :return: Two offspring individuals.
+        """
+        u = np.random.rand(len(parent1))
+        beta = np.where(u <= 0.5, (2 * u) ** (1 / (sbx_eta + 1)), (1 / (2 * (1 - u))) ** (1 / (sbx_eta + 1)))
+        offspring1 = 0.5 * ((1 + beta) * parent1 + (1 - beta) * parent2)
+        offspring2 = 0.5 * ((1 - beta) * parent1 + (1 + beta) * parent2)
+        return offspring1, offspring2
+
+    def polynomial_mutation(individual, mut_indpb=1 / N_P, mut_eta=20):
+        """
+        Polynomial mutation operation.
+
+        :param individual: Individual to be mutated.
+        :param mut_indpb: Probability of mutating each decision variable.
+        :param mut_eta: Distribution index for mutation.
+        :return: Mutated individual.
+        """
+        for i in range(len(individual)):
+            if np.random.rand() < mut_indpb:
+                u = np.random.rand()
+                if u < 0.5:
+                    delta = (2 * u) ** (1 / (mut_eta + 1)) - 1
+                else:
+                    delta = 1 - (2 * (1 - u)) ** (1 / (mut_eta + 1))
+                individual[i] += (xub[i] - xlb[i]) * delta
+        return individual
+
+    # Select parents for crossover (using tournament selection)
+    parent_indices = np.random.randint(POP_SIZE, size=(POP_SIZE, 2))
+    parents = pops['individuals'][parent_indices]
+
+    # Generate offspring using SBX crossover
+    offspring = np.zeros((POP_SIZE, N_P))
+    for i in range(int(POP_SIZE / 2)):
+        offspring[2 * i, :], offspring[2 * i + 1, :] = sbx_crossover(parents[i, 0, :], parents[i, 1, :])
+
+    # Apply polynomial mutation to offspring
+    for i in range(POP_SIZE):
+        offspring[i, :] = polynomial_mutation(offspring[i, :])
+
+    # Ensure offspring are within bounds
+    offspring = np.clip(offspring, xlb, xub)
+    new_pops = offspring
+    return new_pops
+
+[2024-06-14 08:57:59,777][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    The function evolves the current population to the next generation population by leveraging the search trajectory.
+
+    :param `pops`, current population consists of {'individuals': numpy.ndarray with shape(POP_SIZE, N_P), 'rankings': numpy.ndarray with shape(POP_SIZE,)}. Each row in pop['individuals'] represents an individual. Individuals have been sorted by rankings in ascending order, and smaller rankings indicate superior performance. rankings are gained via non-dominated sorting, where all the individuals may share the same rankings.
+    :param `search_trajectory`, trajectory gained along the evolutionary search that consists of {'individuals': numpy.ndarray with shape(:, N_P) or None; 'rankings': numpy.ndarray with shape(:,) or None}, representing the latest several populations collected throughout the evolutionary search to aid in design intelligent evolutionary operators.
+    :param `xlb`: the lower_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+    :param `xub`: the upper_bound of decision variables for each individual, i.e., numpy.ndarray with shape(N_P,)
+    :param `POP_SIZE`: the number of individuals in each population
+    :param `N_P`: the number of decision variables
+    :param `current_gen`: the number of current generation
+    :param `max_gen`: the maximum number of generations
+    :return `new_pops`, new population in the format of numpy.ndarray (with shape(POP_SIZE, N_P)) that may achieve superior results on the multi-objective problems.
+    """
+    def tournament_selection(pop, k=2):
+        """Tournament selection to choose parent individuals."""
+        idx = np.random.randint(0, len(pop['individuals']), size=(k,))
+        selected_idx = idx[pop['rankings'][idx].argmin()]
+        return pop['individuals'][selected_idx]
+
+    def sbx_crossover(parent1, parent2, eta_c=15, prob=1.0):
+        """Simulated binary crossover (SBX) for real-valued encoding."""
+        offspring1 = np.zeros_like(parent1)
+        offspring2 = np.zeros_like(parent2)
+        for i in range(len(parent1)):
+            if np.random.rand() <= prob:
+                if abs(parent1[i] - parent2[i]) > 1e-12:
+                    # ensure parents are not identical
+                    if parent1[i] > parent2[i]:
+                        parent1, parent2 = parent2, parent1
+                    u = np.random.rand()
+                    beta = (2 * u) ** (1 / (eta_c + 1)) if u <= 0.5 else (1 / (2 * (1 - u))) ** (1 / (eta_c + 1))
+                    offspring1[i] = 0.5 * ((1 + beta) * parent1[i] + (1 - beta) * parent2[i])
+                    offspring2[i] = 0.5 * ((1 - beta) * parent1[i] + (1 + beta) * parent2[i])
+                else:
+                    offspring1[i] = parent1[i]
+                    offspring2[i] = parent2[i]
+            else:
+                offspring1[i] = parent1[i]
+                offspring2[i] = parent2[i]
+        return offspring1, offspring2
+
+    def polynomial_mutation(individual, eta_m=20, prob=1.0 / N_P):
+        """Polynomial mutation for real-valued encoding."""
+        mutated_individual = individual.copy()
+        for i in range(len(individual)):
+            if np.random.rand() <= prob:
+                u = np.random.rand()
+                if u < 0.5:
+                    delta = (2 * u) ** (1 / (eta_m + 1)) - 1
+                    mutated_individual[i] = individual[i] + delta * (individual[i] - xlb[i])
+                else:
+                    delta = 1 - (2 * (1 - u)) ** (1 / (eta_m + 1))
+                    mutated_individual[i] = individual[i] + delta * (xub[i] - individual[i])
+        return mutated_individual
+
+    # Create an empty array to store the new population
+    new_pop = np.zeros((POP_SIZE, N_P))
+
+    # **Subsection Selection**: First of all, pair the parent individuals---potentially selected from both the populations and the search trajectory---for intelligent crossover. This may produce POP_SIZE/2 pairs of parent individuals.
+    for i in range(int(POP_SIZE/2)):
+        parent1 = tournament_selection(pops)
+        parent2 = tournament_selection(pops)
+        # You can add logic here to select parents from `search_trajectory` as well
+
+        # **Subsection Crossover**: Secondly, conduct intelligent crossover between each pair of parent individuals based on the innovative search strategies, generate two offspring individuals for each pair, and thus obtain a new population `new_pop` with shape (POP_SIZE, N_P) that may achieve superior performance in optimization.
+        offspring1, offspring2 = sbx_crossover(parent1, parent2)
+
+        # **Subsection Mutation**: Thirdly, fine-tune the `new_pop` gained from Crossover by harnessing the innovative search strategies, and return the modified population `new_pop` using numpy.ndarray with shape(POP_SIZE, N_P).
+        offspring1 = polynomial_mutation(offspring1)
+        offspring2 = polynomial_mutation(offspring2)
+
+        # Add the offspring to the new population
+        new_pop[2*i] = offspring1
+        new_pop[2*i+1] = offspring2
+
+    # **Subsection Checking**: Ensure that the decision variable values in `new_pop` are within the `xlb` lower bounds and `xub` upper bounds before returning it.
+    new_pop = np.clip(new_pop, xlb, xub)
+    return new_pop
+
+[2024-06-14 08:59:52,231][LLM_CodeGen_OP.py][line:153][INFO] 
+def next_generation(pops: {}, search_trajectory: {}, xlb: numpy.ndarray, xub: numpy.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolve a new generation using an intelligent evolutionary operator.
+
+    Args:
+        pops (dict): Current population in format {'individuals': numpy.ndarray (POP_SIZE, N_P), 'rankings': numpy.ndarray (POP_SIZE,)}.
+        search_trajectory (dict): Search trajectory with format {'individuals': numpy.ndarray (:, N_P) or None, 'rankings': numpy.ndarray (:,) or None}.
+        xlb (numpy.ndarray): Lower bounds for decision variables (N_P,).
+        xub (numpy.ndarray): Upper bounds for decision variables (N_P,).
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum number of generations.
+
+    Returns:
+        numpy.ndarray: New population (POP_SIZE, N_P).
+    """
+
+    def sbx_crossover(parent1: numpy.ndarray, parent2: numpy.ndarray, eta_c: float = 15.0) -> tuple:
+        """
+        Perform simulated binary crossover (SBX) on two parents.
+
+        Args:
+            parent1 (numpy.ndarray): First parent.
+            parent2 (numpy.ndarray): Second parent.
+            eta_c (float): Crossover distribution index.
+
+        Returns:
+            tuple: Two offspring individuals.
+        """
+        child1 = np.empty_like(parent1)
+        child2 = np.empty_like(parent2)
+        rand = np.random.random(parent1.shape)
+        beta = np.where(rand <= 0.5, (2 * rand) ** (1.0 / (eta_c + 1.0)), (1.0 / (2.0 * (1.0 - rand))) ** (1.0 / (eta_c + 1.0)))
+        beta = np.where(rand > 0.5, (2 * rand) ** (1.0 / (eta_c + 1.0)), (1.0 / (2.0 * (1.0 - rand))) ** (1.0 / (eta_c + 1.0)))
+        child1 = 0.5 * ((1 + beta) * parent1 + (1 - beta) * parent2)
+        child2 = 0.5 * ((1 - beta) * parent1 + (1 + beta) * parent2)
+        return child1, child2
+
+    def polynomial_mutation(individual: numpy.ndarray, eta_m: float = 20.0) -> numpy.ndarray:
+        """
+        Perform polynomial mutation on an individual.
+
+        Args:
+            individual (numpy.ndarray): Individual to mutate.
+            eta_m (float): Mutation distribution index.
+
+        Returns:
+            numpy.ndarray: Mutated individual.
+        """
+        mutant = np.copy(individual)
+        rand = np.random.random(individual.shape)
+        delta = np.where(rand < 0.5, (2 * rand) ** (1.0 / (eta_m + 1.0)) - 1, 1 - (2 * (1 - rand)) ** (1.0 / (eta_m + 1.0)))
+        mutant = mutant + (xub - xlb) * delta
+        return mutant
+    
+    def generate_offspring(parent1: numpy.ndarray, parent2: numpy.ndarray) -> tuple:
+        """
+        Generate two offspring individuals from two parent individuals.
+
+        Args:
+            parent1 (numpy.ndarray): The first parent individual.
+            parent2 (numpy.ndarray): The second parent individual.
+
+        Returns:
+            tuple: Two offspring individuals.
+        """
+        # Crossover
+        offspring1, offspring2 = sbx_crossover(parent1, parent2)
+
+        # Mutation
+        offspring1 = polynomial_mutation(offspring1)
+        offspring2 = polynomial_mutation(offspring2)
+
+        return offspring1, offspring2
+
+
+    # Select parents for crossover
+    selected_indices = np.arange(POP_SIZE)
+    np.random.shuffle(selected_indices)
+    parents = pops['individuals'][selected_indices]
+
+    # Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1 = parents[i]
+        parent2 = parents[i + 1]
+        offspring1, offspring2 = generate_offspring(parent1, parent2)
+        new_pop.extend([offspring1, offspring2])
+
+    new_pop = np.array(new_pop)
+    
+    # Ensure decision variable values are within bounds
+    new_pop = np.clip(new_pop, xlb, xub)
+
+    return new_pop
+
+[2024-06-14 08:59:52,232][interaction.py][line:67][INFO] evolving-----------------------------------
+[2024-06-14 11:15:10,972][interaction.py][line:67][INFO] evolving-----------------------------------
+[2024-06-14 15:20:15,009][interaction.py][line:67][INFO] evolving-----------------------------------
+[2024-06-14 19:22:18,930][interaction.py][line:127][INFO] finish

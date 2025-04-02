@@ -1,0 +1,714 @@
+[2025-01-22 14:10:54,869][interaction.py][line:63][INFO] start
+[2025-01-22 14:13:15,271][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+import random
+
+def next_generation(pops: {}, D_lst: np.ndarray, POP_SIZE: int, N_P: int):
+
+    def selection(pops):
+        # Tournament selection based on rankings
+        selected_parents = []
+        for _ in range(POP_SIZE // 2):
+            tournament = random.sample(range(POP_SIZE), k=3)
+            tournament_winner = min(tournament, key=lambda x: pops['rankings'][x])
+            selected_parents.append(pops['individuals'][tournament_winner])
+        return np.array(selected_parents)
+
+    def crossover(parent1, parent2):
+        # Order 1 crossover
+        start, end = sorted(random.sample(range(N_P), 2))
+        child = [None] * N_P
+        child[start:end] = parent1[start:end]
+        child = fill_missing(child, parent2, start, end)
+        return np.array(child, dtype=np.int32)
+
+    def fill_missing(child, parent, start, end):
+        # Helper function for crossover to fill missing elements
+        child_elements = set(child[start:end])
+        parent_elements = [item for item in parent if item not in child_elements]
+        pointer = 0
+        for i in range(N_P):
+            if child[i] is None:
+                child[i] = parent_elements[pointer]
+                pointer += 1
+        return child
+
+    def mutation(individual):
+        # Swap mutation
+        i, j = random.sample(range(N_P), 2)
+        individual[i], individual[j] = individual[j], individual[i]
+        return individual
+
+    def check_and_correct(new_pop):
+        # Check for duplicates and correct them
+        for i in range(len(new_pop)):
+            unique_elements, counts = np.unique(new_pop[i], return_counts=True)
+            duplicates = unique_elements[counts > 1]
+            missing = set(range(N_P)) - set(unique_elements)
+            for dup in duplicates:
+                indices = np.where(new_pop[i] == dup)[0]
+                new_pop[i][indices[1:]] = list(missing)[:len(indices) - 1]
+                missing -= set(new_pop[i][indices[1:]])
+        return new_pop
+
+    # Selection
+    parents = selection(pops)
+    
+    # Crossover
+    new_pop = []
+    for i in range(0, len(parents), 2):
+        parent1, parent2 = parents[i], parents[i+1]
+        child1 = crossover(parent1, parent2)
+        child2 = crossover(parent2, parent1)
+        new_pop.extend([child1, child2])
+    new_pop = np.array(new_pop)
+    
+    # Mutation
+    for i in range(len(new_pop)):
+        if random.random() < 0.1:  # Mutation chance
+            new_pop[i] = mutation(new_pop[i])
+    
+    # Checking
+    new_pop = check_and_correct(new_pop)
+    
+    return new_pop.astype(np.int32)
+
+[2025-01-22 14:14:59,350][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+import random
+
+def next_generation(pops: {}, D_lst: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Evolve the population for the next generation using selection, crossover, mutation, and checking.
+    """
+    
+    def selection(pops):
+        """
+        Select parent individuals for crossover.
+        """
+        # Tournament selection
+        def tournament_selection(rankings, tournament_size=2):
+            selected_indices = []
+            for _ in range(POP_SIZE // 2):
+                participants = np.random.choice(range(len(rankings)), tournament_size, replace=False)
+                winner = participants[np.argmin(rankings[participants])]
+                selected_indices.append(winner)
+            return selected_indices
+        
+        selected_indices = tournament_selection(pops['rankings'])
+        parent_pairs = [(selected_indices[i], selected_indices[i + 1]) for i in range(0, len(selected_indices), 2)]
+        return parent_pairs
+    
+    def crossover(parent_pairs, individuals):
+        """
+        Perform crossover between pairs of parent individuals.
+        """
+        def order_crossover(parent1, parent2):
+            start, end = sorted(random.sample(range(N_P), 2))
+            child = [None] * N_P
+            child[start:end] = parent1[start:end]
+            child_positions = set(parent1[start:end])
+            fill_pos = end
+            for gene in parent2:
+                if gene not in child_positions:
+                    if fill_pos >= N_P:
+                        fill_pos = 0
+                    child[fill_pos] = gene
+                    fill_pos += 1
+            return child
+        
+        new_pop = []
+        for parent1_idx, parent2_idx in parent_pairs:
+            parent1 = individuals[parent1_idx]
+            parent2 = individuals[parent2_idx]
+            child1 = order_crossover(parent1, parent2)
+            child2 = order_crossover(parent2, parent1)
+            new_pop.extend([child1, child2])
+        return np.array(new_pop, dtype=np.int32)
+    
+    def mutation(new_pop):
+        """
+        Apply mutation to the new population.
+        """
+        def swap_mutation(individual):
+            a, b = np.random.choice(range(N_P), 2, replace=False)
+            individual[a], individual[b] = individual[b], individual[a]
+            return individual
+        
+        for individual in new_pop:
+            if np.random.rand() < 0.2:  # Mutation probability
+                swap_mutation(individual)
+        return new_pop
+    
+    def checking(new_pop):
+        """
+        Ensure that each row in the new population is a valid permutation.
+        """
+        for i, individual in enumerate(new_pop):
+            unique_elements = set(individual)
+            if len(unique_elements) != N_P:
+                # Repair the individual if it's not a valid permutation
+                missing_elements = set(range(N_P)) - unique_elements
+                duplicates = [x for x in individual if individual.count(x) > 1]
+                for dup in duplicates:
+                    idx_to_replace = next(idx for idx, val in enumerate(individual) if val == dup)
+                    individual[idx_to_replace] = missing_elements.pop()
+            assert len(set(individual)) == N_P, "Invalid permutation after checking."
+        return new_pop
+    
+    parent_pairs = selection(pops)
+    new_pop = crossover(parent_pairs, pops['individuals'])
+    new_pop = mutation(new_pop)
+    new_pop = checking(new_pop)
+    
+    return new_pop
+
+[2025-01-22 14:20:51,684][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+import random
+
+def next_generation(pops: {}, D_lst: np.ndarray, POP_SIZE: int, N_P: int):
+    def selection(pops):
+        # Tournament selection based on rankings
+        tournament_size = 3
+        selected_parents = []
+        for _ in range(POP_SIZE // 2):
+            tournament = np.random.choice(POP_SIZE, tournament_size, replace=False)
+            tournament_winner = tournament[np.argmin(pops['rankings'][tournament])]
+            selected_parents.append(pops['individuals'][tournament_winner])
+        return np.array(selected_parents)
+    
+    def crossover(parent1, parent2):
+        # Order Crossover (OX)
+        start, end = sorted(random.sample(range(N_P), 2))
+        child = [None] * N_P
+        child[start:end] = parent1[start:end]
+        place_index = end
+        for gene in parent2:
+            if gene not in child:
+                if place_index >= N_P:
+                    place_index = 0
+                child[place_index] = gene
+                place_index += 1
+        return np.array(child, dtype=np.int32)
+        
+    def mutate(individual):
+        # Swap mutation
+        index1, index2 = random.sample(range(N_P), 2)
+        individual[index1], individual[index2] = individual[index2], individual[index1]
+        return individual
+    
+    def repair(individual):
+        # Repair function to ensure a valid permutation
+        missing = set(range(N_P)) - set(individual)
+        duplicates = [x for x in individual if list(individual).count(x) > 1]
+        for dup in set(duplicates):  # Ensure we only replace each duplicate once
+            dup_indices = [i for i, x in enumerate(individual) if x == dup]
+            for dup_index in dup_indices[1:]:  # Skip the first occurrence
+                individual[dup_index] = missing.pop()
+        return individual
+    
+    # Selection
+    parent_pairs = selection(pops)
+    
+    # Crossover
+    new_pop = []
+    for i in range(0, len(parent_pairs), 2):
+        parent1, parent2 = parent_pairs[i], parent_pairs[(i+1) % len(parent_pairs)]
+        child1 = crossover(parent1, parent2)
+        child2 = crossover(parent2, parent1)
+        new_pop.extend([child1, child2])
+        
+    # Mutation and Repair
+    new_pop = [repair(mutate(individual)) for individual in new_pop]
+    
+    # Ensure we have exactly POP_SIZE individuals
+    new_pop = new_pop[:POP_SIZE]
+    
+    return np.array(new_pop, dtype=np.int32)
+
+[2025-01-22 14:27:35,964][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, D_lst: np.ndarray, POP_SIZE: int, N_P: int):
+    
+    def selection(pops, POP_SIZE):
+        # Tournament selection based on rankings
+        parents = []
+        for _ in range(POP_SIZE):
+            i, j = np.random.choice(range(POP_SIZE), 2, replace=False)
+            if pops['rankings'][i] < pops['rankings'][j]:
+                parents.append(pops['individuals'][i])
+            else:
+                parents.append(pops['individuals'][j])
+        return np.array(parents)
+    
+    def crossover(parent1, parent2):
+        # Order 1 crossover
+        start, end = sorted(np.random.choice(range(N_P), 2, replace=False))
+        child = [None] * N_P
+        child[start:end] = parent1[start:end]
+        pointer = end
+        for gene in parent2:
+            if gene not in child:
+                if pointer >= N_P:
+                    pointer = 0
+                child[pointer] = gene
+                pointer += 1
+        return child
+    
+    def mutate(individual):
+        # Swap mutation
+        i, j = np.random.choice(range(N_P), 2, replace=False)
+        individual[i], individual[j] = individual[j], individual[i]
+        return individual
+    
+    def repair(individual):
+        # Repair mechanism to ensure a valid permutation
+        missing = set(range(N_P)) - set(individual)
+        duplicates = set([x for x in individual if individual.count(x) > 1])
+        for dup in duplicates:
+            idx = individual.index(dup)
+            individual[idx] = missing.pop()
+        return individual
+    
+    # Selection
+    selected_parents = selection(pops, POP_SIZE)
+    
+    # Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1, parent2 = selected_parents[i], selected_parents[(i + 1) % POP_SIZE]
+        child1 = crossover(parent1, parent2)
+        child2 = crossover(parent2, parent1)
+        new_pop.append(child1)
+        new_pop.append(child2)
+    
+    # Mutation and repair
+    for i in range(POP_SIZE):
+        if np.random.rand() < 0.2:  # Mutation probability
+            new_pop[i] = mutate(new_pop[i])
+        new_pop[i] = repair(new_pop[i])
+    
+    # Checking and ensuring new_pop is of correct size
+    new_pop = new_pop[:POP_SIZE]
+    for i in range(POP_SIZE):
+        assert len(set(new_pop[i])) == N_P, "Invalid individual found!"
+    
+    return np.array(new_pop, dtype=np.int32)
+
+[2025-01-22 14:30:06,976][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+import random
+
+def next_generation(pops: {}, D_lst: np.ndarray, POP_SIZE: int, N_P: int):
+    def tournament_selection(population, rankings, tournament_size=2):
+        selected = []
+        for _ in range(POP_SIZE // 2):
+            tournament = [random.randint(0, POP_SIZE - 1) for _ in range(tournament_size)]
+            winner = min(tournament, key=lambda i: rankings[i])
+            selected.append(population[winner])
+        return np.array(selected)
+
+    def order_crossover(parent1, parent2):
+        start, end = sorted(random.sample(range(N_P), 2))
+        child = [-1] * N_P
+        child[start:end] = parent1[start:end]
+        pointer = end
+        for gene in np.concatenate((parent2[end:], parent2[:end])):
+            if gene not in child:
+                while pointer < N_P and child[pointer] != -1:
+                    pointer += 1
+                if pointer >= N_P:
+                    pointer = 0
+                while child[pointer] != -1:
+                    pointer += 1
+                child[pointer] = gene
+        return np.array(child, dtype=np.int32)
+
+    def mutate(individual, mutation_rate=0.02):
+        for i in range(N_P):
+            if random.random() < mutation_rate:
+                j = random.randint(0, N_P - 1)
+                individual[i], individual[j] = individual[j], individual[i]
+        return individual
+
+    def check_population(population):
+        for i in range(len(population)):
+            if len(np.unique(population[i])) != N_P:
+                population[i] = np.random.permutation(N_P)
+        return population
+
+    # Selection
+    selected_parents = tournament_selection(pops['individuals'], pops['rankings'])
+
+    # Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1, parent2 = selected_parents[i % len(selected_parents)], selected_parents[(i + 1) % len(selected_parents)]
+        child1, child2 = order_crossover(parent1, parent2), order_crossover(parent2, parent1)
+        new_pop.extend([child1, child2])
+
+    new_pop = np.array(new_pop, dtype=np.int32)
+
+    # Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = mutate(new_pop[i])
+
+    # Checking
+    new_pop = check_population(new_pop)
+
+    return new_pop
+
+[2025-01-22 14:32:48,877][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, D_lst: np.ndarray, POP_SIZE: int, N_P: int) -> np.ndarray:
+    def selection(pops, POP_SIZE):
+        # Tournament selection based on rankings
+        selected_indices = []
+        for _ in range(POP_SIZE):
+            contenders = np.random.choice(POP_SIZE, size=2, replace=False)
+            winner = contenders[np.argmin(pops['rankings'][contenders])]
+            selected_indices.append(winner)
+        return pops['individuals'][selected_indices]
+
+    def crossover(parent1, parent2):
+        # Order crossover operator (OX)
+        start, end = sorted(np.random.choice(range(N_P), size=2, replace=False))
+        child = [None] * N_P
+        child[start:end] = parent1[start:end]
+        p2_filtered = [item for item in parent2 if item not in child[start:end]]
+        child = [item if item is not None else p2_filtered.pop(0) for item in child]
+        return child
+
+    def mutate(individual):
+        # Swap mutation
+        idx1, idx2 = np.random.choice(range(N_P), size=2, replace=False)
+        individual[idx1], individual[idx2] = individual[idx2], individual[idx1]
+        return individual
+
+    def check_and_fix(individual):
+        # Check if the individual is a valid permutation, if not, fix it
+        if len(set(individual)) != N_P:
+            individual = np.random.permutation(N_P)
+        return individual
+
+    # Selection
+    selected_parents = selection(pops, POP_SIZE)
+    new_pop = []
+
+    # Crossover
+    for i in range(0, POP_SIZE // 2):
+        parent1, parent2 = selected_parents[2*i], selected_parents[2*i+1]
+        child1 = crossover(parent1, parent2)
+        child2 = crossover(parent2, parent1)
+        new_pop.extend([child1, child2])
+
+    # Mutation
+    new_pop = [mutate(individual) for individual in new_pop]
+
+    # Checking and fixing
+    new_pop = [check_and_fix(individual) for individual in new_pop]
+
+    return np.array(new_pop, dtype=np.int32)
+
+
+[2025-01-22 14:34:34,234][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy
+
+def next_generation(pops: {}, D_lst: numpy.ndarray, POP_SIZE: int, N_P: int):
+    # Helper function to perform tournament selection
+    def tournament_selection(rankings, tournament_size=3):
+        selected_indices = []
+        for _ in range(POP_SIZE // 2):
+            participants = numpy.random.choice(numpy.arange(POP_SIZE), tournament_size, replace=False)
+            selected_indices.append(participants[numpy.argmin(rankings[participants])])
+        return selected_indices
+
+    # Helper function to perform ordered crossover (OX)
+    def ordered_crossover(parent1, parent2):
+        start, end = sorted(numpy.random.choice(range(N_P), 2, replace=False))
+        child = [None] * N_P
+        child[start:end] = parent1[start:end]
+        parent2_indices = [i for i in range(N_P) if parent2[i] not in child[start:end]]
+        child_indices = [i for i in range(N_P) if child[i] is None]
+        for idx, gene in zip(child_indices, parent2_indices):
+            child[idx] = parent2[gene]
+        return child
+
+    # Helper function to perform swap mutation
+    def swap_mutation(individual):
+        a, b = numpy.random.choice(range(N_P), 2, replace=False)
+        individual[a], individual[b] = individual[b], individual[a]
+        return individual
+
+    # **Subsection Selection**
+    rankings = pops['rankings']
+    selected_indices = tournament_selection(rankings)
+    parent_pairs = [(pops['individuals'][i], pops['individuals'][numpy.random.choice(selected_indices)]) for i in selected_indices]
+
+    # **Subsection Crossover**
+    new_pop = []
+    for parent1, parent2 in parent_pairs:
+        child1 = ordered_crossover(parent1, parent2)
+        child2 = ordered_crossover(parent2, parent1)
+        new_pop.extend([child1, child2])
+
+    # **Subsection Mutation**
+    for i in range(len(new_pop)):
+        if numpy.random.rand() < 0.2:  # Mutation probability
+            new_pop[i] = swap_mutation(new_pop[i])
+
+    new_pop = numpy.array(new_pop, dtype=numpy.int32)
+
+    # **Subsection Checking**
+    # Here we simply check if the new_pop is a permutation of N_P integers from 0 to N_P-1
+    # This check is redundant if crossover and mutation are implemented correctly
+    for individual in new_pop:
+        assert len(set(individual)) == N_P, "Individual does not contain a permutation of N_P integers"
+
+    return new_pop
+
+[2025-01-22 14:38:12,447][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+import random
+
+def next_generation(pops: {}, D_lst: np.ndarray, POP_SIZE: int, N_P: int):
+    def select_parents(rankings):
+        # Tournament selection based on rankings
+        def tournament_selection():
+            participants = random.sample(range(POP_SIZE), k=3)
+            best = min(participants, key=lambda x: rankings[x])
+            return best
+
+        parents = []
+        for _ in range(POP_SIZE // 2):
+            parent1 = tournament_selection()
+            parent2 = tournament_selection()
+            while parent1 == parent2:
+                parent2 = tournament_selection()
+            parents.append((parent1, parent2))
+        return parents
+
+    def ordered_crossover(parent1, parent2):
+        # Generating two children using ordered crossover
+        start, end = sorted(random.sample(range(N_P), 2))
+        child1 = [None] * N_P
+        child2 = [None] * N_P
+
+        child1[start:end] = parent1[start:end]
+        child2[start:end] = parent2[start:end]
+
+        fill_child(child1, parent2, start, end)
+        fill_child(child2, parent1, start, end)
+
+        return np.array(child1, dtype=np.int32), np.array(child2, dtype=np.int32)
+
+    def fill_child(child, parent, start, end):
+        # Fill the None values in the child with the remaining genes from parent
+        p_idx, c_idx = end, end
+        while None in child:
+            if parent[p_idx] not in child:
+                if c_idx >= N_P:
+                    c_idx = 0
+                if child[c_idx] is None:
+                    child[c_idx] = parent[p_idx]
+                    c_idx += 1
+            p_idx = (p_idx + 1) % N_P
+
+    def mutate(individual):
+        # Swap mutation
+        idx1, idx2 = random.sample(range(N_P), 2)
+        individual[idx1], individual[idx2] = individual[idx2], individual[idx1]
+        return individual
+
+    def repair(individual):
+        # Repair the individual if it is not a permutation of the cities
+        counts = np.bincount(individual, minlength=N_P)
+        for i in range(N_P):
+            while counts[i] > 1:
+                for j in range(N_P):
+                    if counts[j] == 0:
+                        individual[np.where(individual == i)[0][0]] = j
+                        counts[j] += 1
+                        counts[i] -= 1
+                        break
+        return individual
+
+    # **Subsection Selection**
+    parents = select_parents(pops['rankings'])
+
+    # **Subsection Crossover**
+    new_pop = []
+    for parent1, parent2 in parents:
+        p1, p2 = pops['individuals'][parent1], pops['individuals'][parent2]
+        offspring1, offspring2 = ordered_crossover(p1, p2)
+        new_pop.append(offspring1)
+        new_pop.append(offspring2)
+
+    # **Subsection Mutation**
+    new_pop = [mutate(individual) for individual in new_pop]
+
+    # **Subsection Checking**
+    new_pop = [repair(individual) for individual in new_pop]
+
+    return np.array(new_pop, dtype=np.int32)
+
+[2025-01-22 14:39:52,962][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, D_lst: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Evolve a new generation for the multi-objective traveling salesman problem.
+
+    :param pops: Current population and their rankings.
+    :param D_lst: Travel cost matrices for different objectives.
+    :param POP_SIZE: Size of the population.
+    :param N_P: Number of cities.
+    :return: New population as a numpy.ndarray.
+    """
+
+    def select_parents(rankings):
+        """
+        Tournament selection based on rankings.
+        """
+        parents = []
+        for _ in range(POP_SIZE // 2):
+            idx1, idx2 = np.random.choice(range(POP_SIZE), 2, replace=False)
+            parent = idx1 if rankings[idx1] < rankings[idx2] else idx2
+            parents.append(parent)
+        return parents
+
+    def crossover(parent1, parent2):
+        """
+        Order crossover operator.
+        """
+        start, end = sorted(np.random.choice(range(N_P), 2, replace=False))
+        offspring = [-1] * N_P
+        offspring[start:end] = parent1[start:end]
+        p2_filtered = [item for item in parent2 if item not in offspring]
+        offspring = [item if item != -1 else p2_filtered.pop(0) for item in offspring]
+        return offspring
+
+    def mutate(individual):
+        """
+        Swap mutation operator.
+        """
+        idx1, idx2 = np.random.choice(range(N_P), 2, replace=False)
+        individual[idx1], individual[idx2] = individual[idx2], individual[idx1]
+        return individual
+
+    def repair(individual):
+        """
+        Repair function to ensure all individuals are valid permutations.
+        """
+        unique_elements, counts = np.unique(individual, return_counts=True)
+        missing = set(range(N_P)) - set(unique_elements[counts == 1])
+        for elem in unique_elements[counts > 1]:
+            idx = np.where(individual == elem)[0][1]  # Get the index of the second occurrence
+            individual[idx] = missing.pop()
+        return individual
+
+    # Subsection Selection
+    parent_indices = select_parents(pops['rankings'])
+    parent_pairs = [(pops['individuals'][i], pops['individuals'][j]) for i, j in zip(parent_indices[::2], parent_indices[1::2])]
+
+    # Subsection Crossover
+    new_pop = []
+    for parent1, parent2 in parent_pairs:
+        offspring1 = crossover(parent1, parent2)
+        offspring2 = crossover(parent2, parent1)
+        new_pop.extend([offspring1, offspring2])
+
+    # Subsection Mutation
+    new_pop = [mutate(individual) for individual in new_pop]
+
+    # Subsection Checking and Repairing
+    new_pop = [repair(individual) for individual in new_pop]
+
+    return np.array(new_pop, dtype=np.int32)
+
+[2025-01-22 14:44:11,671][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, D_lst: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Evolves the current population to the next generation using selection, crossover, mutation, and checking.
+    """
+
+    def selection(pops, POP_SIZE):
+        """
+        Selects parent individuals based on their rankings to form pairs for crossover.
+        """
+        # Using tournament selection as an example
+        tournament_size = 5
+        parents = []
+        for _ in range(POP_SIZE // 2):
+            tournament_indices = np.random.choice(POP_SIZE, tournament_size, replace=False)
+            tournament = pops['individuals'][tournament_indices]
+            best_individual_index = tournament_indices[np.argmin(pops['rankings'][tournament_indices])]
+            parents.append(pops['individuals'][best_individual_index])
+        return np.array(parents)
+
+    def crossover(parents, N_P):
+        """
+        Performs intelligent crossover between pairs of parent individuals.
+        """
+        def order_crossover(parent1, parent2):
+            start, end = sorted(np.random.choice(range(N_P), 2, replace=False))
+            child = [None] * N_P
+            child[start:end] = parent1[start:end]
+            pointer = end
+            for gene in parent2:
+                if gene not in child:
+                    if pointer >= N_P:
+                        pointer = 0
+                    child[pointer] = gene
+                    pointer += 1
+            return child
+
+        new_pop = []
+        for i in range(0, len(parents), 2):
+            parent1, parent2 = parents[i], parents[(i+1) % len(parents)]
+            child1 = order_crossover(parent1, parent2)
+            child2 = order_crossover(parent2, parent1)
+            new_pop.extend([child1, child2])
+        return np.array(new_pop, dtype=np.int32)
+
+    def mutation(new_pop, N_P):
+        """
+        Applies mutation to the new population.
+        """
+        mutation_rate = 0.1
+        for i in range(len(new_pop)):
+            if np.random.rand() < mutation_rate:
+                swap_indices = np.random.choice(range(N_P), 2, replace=False)
+                new_pop[i][swap_indices] = new_pop[i][swap_indices[::-1]]
+        return new_pop
+
+    def checking(new_pop, N_P):
+        """
+        Ensures each individual in the population is a valid permutation.
+        """
+        for i, individual in enumerate(new_pop):
+            if len(np.unique(individual)) != N_P:
+                new_pop[i] = np.random.permutation(N_P)
+        return new_pop
+
+    # Subsection Selection
+    parent_pairs = selection(pops, POP_SIZE)
+
+    # Subsection Crossover
+    new_pop = crossover(parent_pairs, N_P)
+
+    # Subsection Mutation
+    new_pop = mutation(new_pop, N_P)
+
+    # Subsection Checking
+    new_pop = checking(new_pop, N_P)
+
+    return new_pop
+
+[2025-01-22 14:44:11,672][interaction.py][line:70][INFO] evolving-----------------------------------
+[2025-01-22 23:01:43,234][interaction.py][line:130][INFO] finish

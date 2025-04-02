@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="e22dedee-756f-42a1-ae6d-f0a39b464a0e" name="LLMOPT">
+        <fileTransfer rootFolder="/root" accessType="SFTP" host="10.242.187.48" port="22000" sshConfigId="b0dd5aed-46ef-496c-a56f-87ba96abd4e6" sshConfig="root@10.242.187.48:22000 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+      <webServer id="a551474d-3b7d-4a4f-8f08-7b6773f0ab8c" name="CQU_CPU">
+        <fileTransfer rootFolder="/root/yxhuang" accessType="SFTP" host="10.242.187.48" port="22000" sshConfigId="b0dd5aed-46ef-496c-a56f-87ba96abd4e6" sshConfig="root@10.242.187.48:22000 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

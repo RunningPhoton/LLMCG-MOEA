@@ -1,0 +1,866 @@
+[2025-02-04 07:46:30,064][interaction.py][line:64][INFO] start
+[2025-02-04 07:48:01,725][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using crossover and mutation operators.
+
+    Args:
+        pops (dict): Current population.
+        search_trajectory (dict): Search trajectory.
+        xlb (np.ndarray): Lower bounds of decision variables.
+        xub (np.ndarray): Upper bounds of decision variables.
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum generation number.
+
+    Returns:
+        np.ndarray: New population.
+    """
+
+    def sbx_crossover(parent1, parent2, eta=5):
+        """Simulated Binary Crossover."""
+        offspring1 = np.empty_like(parent1)
+        offspring2 = np.empty_like(parent2)
+        for i in range(N_P):
+            if np.random.rand() < 0.5:
+                if np.abs(parent1[i] - parent2[i]) > 1e-14:
+                    if parent1[i] < parent2[i]:
+                        y1 = parent1[i]
+                        y2 = parent2[i]
+                    else:
+                        y1 = parent2[i]
+                        y2 = parent1[i]
+                    yl = xlb[i]
+                    yu = xub[i]
+                    rand = np.random.rand()
+                    beta = 1.0 + (2.0 * (y1 - yl) / (y2 - y1))
+                    alpha = 2.0 - beta ** (-(eta + 1))
+                    if rand <= (1.0 / alpha):
+                        betaq = (rand * alpha) ** (1.0 / (eta + 1))
+                    else:
+                        betaq = (1.0 / (2.0 - rand * alpha)) ** (1.0 / (eta + 1))
+                    c1 = 0.5 * ((y1 + y2) - betaq * (y2 - y1))
+                    beta = 1.0 + (2.0 * (yu - y2) / (y2 - y1))
+                    alpha = 2.0 - beta ** (-(eta + 1))
+                    if rand <= (1.0 / alpha):
+                        betaq = (rand * alpha) ** (1.0 / (eta + 1))
+                    else:
+                        betaq = (1.0 / (2.0 - rand * alpha)) ** (1.0 / (eta + 1))
+                    c2 = 0.5 * ((y1 + y2) + betaq * (y2 - y1))
+
+                    if c1 < yl:
+                        c1 = yl
+                    if c2 < yl:
+                        c2 = yl
+                    if c1 > yu:
+                        c1 = yu
+                    if c2 > yu:
+                        c2 = yu
+
+                    if np.random.rand() < 0.5:
+                        offspring1[i] = c2
+                        offspring2[i] = c1
+                    else:
+                        offspring1[i] = c1
+                        offspring2[i] = c2
+                else:
+                    offspring1[i] = parent1[i]
+                    offspring2[i] = parent2[i]
+            else:
+                offspring1[i] = parent1[i]
+                offspring2[i] = parent2[i]
+        return offspring1, offspring2
+
+    def polynomial_mutation(individual, pm=0.1, eta_m=20):
+        """Polynomial mutation."""
+        mutant = np.copy(individual)
+        for j in range(N_P):
+            r = np.random.rand()
+            if r < pm:
+                y = individual[j]
+                yl = xlb[j]
+                yu = xub[j]
+                delta1 = (y - yl) / (yu - yl)
+                delta2 = (yu - y) / (yu - yl)
+                r = np.random.rand()
+                mut_pow = 1.0 / (eta_m + 1.0)
+                if r < 0.5:
+                    xy = 1.0 - delta1
+                    val = 2.0 * r + (1.0 - 2.0 * r) * xy ** (eta_m + 1.0)
+                    deltaq = val ** mut_pow - 1.0
+                else:
+                    xy = 1.0 - delta2
+                    val = 2.0 * (1.0 - r) + 2.0 * (r - 0.5) * xy ** (eta_m + 1.0)
+                    deltaq = 1.0 - val ** mut_pow
+
+                y = y + deltaq * (yu - yl)
+                if y < yl:
+                    y = yl
+                if y > yu:
+                    y = yu
+                mutant[j] = y
+        return mutant
+
+    parents = pops['individuals']
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1 = parents[i]
+        parent2 = parents[i+1]
+        offspring1, offspring2 = sbx_crossover(parent1, parent2)
+        offspring1 = polynomial_mutation(offspring1)
+        offspring2 = polynomial_mutation(offspring2)
+        new_pop.append(offspring1)
+        new_pop.append(offspring2)
+    
+    new_pop = np.array(new_pop)
+
+    return new_pop
+[2025-02-04 07:49:31,915][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using crossover and mutation operators.
+
+    Args:
+        pops (dict): Current population.
+        search_trajectory (dict): Search trajectory.
+        xlb (np.ndarray): Lower bounds of decision variables.
+        xub (np.ndarray): Upper bounds of decision variables.
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum generation number.
+
+    Returns:
+        np.ndarray: New population.
+    """
+
+    def sbx_crossover(p1, p2, eta=15):
+        """Simulated Binary Crossover."""
+        offspring = np.empty((2, N_P))
+        for i in range(N_P):
+            if np.random.rand() < 0.5:
+                if abs(p1[i] - p2[i]) > 1e-14:
+                    if p1[i] < p2[i]:
+                        y1 = p1[i]
+                        y2 = p2[i]
+                    else:
+                        y1 = p2[i]
+                        y2 = p1[i]
+                    yl = xlb[i]
+                    yu = xub[i]
+                    rand = np.random.rand()
+                    beta = 1.0 + (2.0 * (y1 - yl) / (y2 - y1))
+                    alpha = 2.0 - beta**(-(eta + 1.0))
+                    if rand <= (1.0 / alpha):
+                        betaq = (rand * alpha)**(1.0 / (eta + 1.0))
+                    else:
+                        betaq = (1.0 / (2.0 - rand * alpha))**(1.0 / (eta + 1.0))
+                    c1 = 0.5 * ((y1 + y2) - betaq * (y2 - y1))
+                    beta = 1.0 + (2.0 * (yu - y2) / (y2 - y1))
+                    alpha = 2.0 - beta**(-(eta + 1.0))
+                    if rand <= (1.0 / alpha):
+                        betaq = (rand * alpha)**(1.0 / (eta + 1.0))
+                    else:
+                        betaq = (1.0 / (2.0 - rand * alpha))**(1.0 / (eta + 1.0))
+                    c2 = 0.5 * ((y1 + y2) + betaq * (y2 - y1))
+
+                    c1 = min(max(c1, yl), yu)
+                    c2 = min(max(c2, yl), yu)
+
+                    if np.random.rand() < 0.5:
+                        offspring[0, i] = c2
+                        offspring[1, i] = c1
+                    else:
+                        offspring[0, i] = c1
+                        offspring[1, i] = c2
+                else:
+                    offspring[0, i] = p1[i]
+                    offspring[1, i] = p2[i]
+            else:
+                offspring[0, i] = p1[i]
+                offspring[1, i] = p2[i]
+        return offspring
+
+
+    def polynomial_mutation(individual, pm=0.1, eta_m=20):
+        """Polynomial Mutation."""
+        mutant = individual.copy()
+        for j in range(N_P):
+            if np.random.rand() <= pm:
+                y = individual[j]
+                yl = xlb[j]
+                yu = xub[j]
+                delta1 = (y - yl) / (yu - yl)
+                delta2 = (yu - y) / (yu - yl)
+                mut_pow = 1.0 / (eta_m + 1.0)
+                rand = np.random.rand()
+                if rand < 0.5:
+                    xy = 1.0 - delta1
+                    val = 2.0 * rand + (1.0 - 2.0 * rand) * xy**(eta_m + 1.0)
+                    deltaq = val**mut_pow - 1.0
+                else:
+                    xy = 1.0 - delta2
+                    val = 2.0 * (1.0 - rand) + 2.0 * (rand - 0.5) * xy**(eta_m + 1.0)
+                    deltaq = 1.0 - val**mut_pow
+
+                y = y + deltaq * (yu - yl)
+                mutant[j] = min(max(y, yl), yu)
+        return mutant
+
+    parents = np.random.choice(POP_SIZE, size=(POP_SIZE // 2, 2), replace=True)
+    new_pop = np.empty((POP_SIZE, N_P))
+
+    for i, (p1_idx, p2_idx) in enumerate(parents):
+      offspring = sbx_crossover(pops['individuals'][p1_idx], pops['individuals'][p2_idx])
+      new_pop[2 * i] = offspring[0]
+      new_pop[2 * i + 1] = offspring[1]
+
+    for i in range(POP_SIZE):
+        new_pop[i] = polynomial_mutation(new_pop[i])
+
+    return new_pop
+[2025-02-04 07:50:46,722][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using evolutionary operators.
+
+    Args:
+        pops (dict): Current population and their rankings.
+        search_trajectory (dict): Historical population data.
+        xlb (np.ndarray): Lower bounds for decision variables.
+        xub (np.ndarray): Upper bounds for decision variables.
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum generation number.
+
+    Returns:
+        np.ndarray: The new population.
+    """
+
+    def sbx_crossover(p1, p2, eta=15):
+        """Simulated Binary Crossover."""
+        u = np.random.rand(N_P)
+        beta = np.where(u <= 0.5, (2 * u)**(1 / (eta + 1)), (1 / (2 * (1 - u)))**(1 / (eta + 1)))
+        o1 = 0.5 * ((1 + beta) * p1 + (1 - beta) * p2)
+        o2 = 0.5 * ((1 - beta) * p1 + (1 + beta) * p2)
+        return o1, o2
+
+    def polynomial_mutation(ind, eta=20):
+        """Polynomial Mutation."""
+        u = np.random.rand(N_P)
+        delta1 = np.where(u < 0.5, (2 * u)**(1 / (eta + 1)) - 1, 1 - (2 * (1 - u))**(1 / (eta + 1)))
+        mutated_ind = ind + (xub - xlb) * delta1
+        return mutated_ind
+
+
+    # Subsection Selection
+    parents = []
+    indices = np.arange(POP_SIZE)
+    np.random.shuffle(indices)
+    for i in range(0, POP_SIZE, 2):
+        parents.append((pops['individuals'][indices[i]], pops['individuals'][indices[i+1]]))
+
+    # Subsection Crossover
+    new_pop = []
+    for p1, p2 in parents:
+        o1, o2 = sbx_crossover(p1, p2)
+        new_pop.extend([o1, o2])
+    new_pop = np.array(new_pop)
+
+    # Subsection Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = polynomial_mutation(new_pop[i])
+
+    # Subsection Checking
+    new_pop = np.clip(new_pop, xlb, xub)
+
+    return new_pop
+[2025-02-04 07:52:11,244][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using crossover and mutation operators.
+
+    Args:
+        pops (dict): Current population.
+        search_trajectory (dict): Search trajectory.
+        xlb (np.ndarray): Lower bounds of decision variables.
+        xub (np.ndarray): Upper bounds of decision variables.
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum generation number.
+
+    Returns:
+        np.ndarray: New population.
+    """
+
+    def sbx_crossover(p1, p2, eta=15):
+        """Simulated Binary Crossover."""
+        offspring = np.empty((2, N_P))
+        for i in range(N_P):
+            if np.random.rand() < 0.5:
+                if abs(p1[i] - p2[i]) > 1e-14:
+                    beta = 1.0 + (2.0 * min(p1[i] - xlb[i], xub[i] - p2[i])) / abs(p1[i] - p2[i])
+                    alpha = 2.0 - beta**(-(eta + 1.0))
+                    u = np.random.rand()
+                    if u <= 1.0 / alpha:
+                        betaq = (u * alpha)**(1.0 / (eta + 1.0))
+                    else:
+                        betaq = (1.0 / (2.0 - u * alpha))**(1.0 / (eta + 1.0))
+                    offspring[0, i] = 0.5 * ((p1[i] + p2[i]) - betaq * abs(p1[i] - p2[i]))
+                    offspring[1, i] = 0.5 * ((p1[i] + p2[i]) + betaq * abs(p1[i] - p2[i]))
+                else:
+                    offspring[0, i] = p1[i]
+                    offspring[1, i] = p2[i]
+            else:
+                offspring[0, i] = p1[i]
+                offspring[1, i] = p2[i]
+        return offspring
+
+    def polynomial_mutation(individual, eta=20):
+        """Polynomial Mutation."""
+        mutant = individual.copy()
+        for i in range(N_P):
+            if np.random.rand() < 1.0 / N_P:
+                delta1 = (mutant[i] - xlb[i]) / (xub[i] - xlb[i])
+                delta2 = (xub[i] - mutant[i]) / (xub[i] - xlb[i])
+                u = np.random.rand()
+                mut_pow = 1.0 / (eta + 1.0)
+                if u < 0.5:
+                    xy = 1.0 - delta1
+                    val = 2.0 * u + (1.0 - 2.0 * u) * (xy**(eta + 1.0))
+                    deltaq = val**mut_pow - 1.0
+                else:
+                    xy = 1.0 - delta2
+                    val = 2.0 * (1.0 - u) + 2.0 * (u - 0.5) * (xy**(eta + 1.0))
+                    deltaq = 1.0 - val**mut_pow
+                mutant[i] = mutant[i] + deltaq * (xub[i] - xlb[i])
+        return mutant
+
+
+    parents = np.random.choice(POP_SIZE, size=(POP_SIZE // 2, 2), replace=True)
+    new_pop = np.empty((POP_SIZE, N_P))
+
+    for i, (p1_idx, p2_idx) in enumerate(parents):
+      p1 = pops['individuals'][p1_idx]
+      p2 = pops['individuals'][p2_idx]
+      offspring = sbx_crossover(p1,p2)
+      new_pop[2 * i] = polynomial_mutation(offspring[0])
+      new_pop[2 * i + 1] = polynomial_mutation(offspring[1])
+
+
+
+    new_pop = np.clip(new_pop, xlb, xub)
+    return new_pop
+[2025-02-04 07:53:26,303][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using crossover and mutation.
+
+    Args:
+        pops (dict): Current population and their rankings.
+        search_trajectory (dict): Historical population data.
+        xlb (np.ndarray): Lower bounds for decision variables.
+        xub (np.ndarray): Upper bounds for decision variables.
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum generation number.
+
+    Returns:
+        np.ndarray: The new population.
+    """
+
+    def sbx_crossover(p1, p2, eta=15):
+        """Simulated Binary Crossover."""
+        u = np.random.rand(N_P)
+        beta = np.where(u <= 0.5, (2 * u)**(1 / (eta + 1)), (1 / (2 * (1 - u)))**(1 / (eta + 1)))
+        c1 = 0.5 * ((1 + beta) * p1 + (1 - beta) * p2)
+        c2 = 0.5 * ((1 - beta) * p1 + (1 + beta) * p2)
+        return c1, c2
+
+    def polynomial_mutation(individual, eta=20):
+        """Polynomial Mutation."""
+        u = np.random.rand(N_P)
+        delta = np.where(u < 0.5, (2 * u)**(1 / (eta + 1)) - 1, 1 - (2 * (1 - u))**(1 / (eta + 1)))
+        mutant = individual + delta * (xub - xlb)
+        return mutant
+
+
+    # Subsection Selection
+    parents_indices = np.random.choice(POP_SIZE, POP_SIZE, replace=True)
+    parents = pops['individuals'][parents_indices]
+
+    # Subsection Crossover
+    new_pop = np.zeros((POP_SIZE, N_P))
+    for i in range(0, POP_SIZE, 2):
+        parent1 = parents[i]
+        parent2 = parents[i+1]
+        child1, child2 = sbx_crossover(parent1, parent2)
+        new_pop[i] = child1
+        if i + 1 < POP_SIZE:
+            new_pop[i+1] = child2
+
+    # Subsection Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = polynomial_mutation(new_pop[i])
+
+    # Subsection Checking
+    new_pop = np.clip(new_pop, xlb, xub)
+
+    return new_pop
+[2025-02-04 07:55:24,530][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using crossover and mutation.
+
+    :param pops: Current population.
+    :param search_trajectory: Search trajectory.
+    :param xlb: Lower bounds of decision variables.
+    :param xub: Upper bounds of decision variables.
+    :param POP_SIZE: Population size.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum generation number.
+    :return: New population.
+    """
+
+    def sbx_crossover(p1, p2, eta=15):
+        """Simulated binary crossover."""
+        offspring = np.empty((2, N_P))
+        for i in range(N_P):
+            if np.random.rand() < 0.5:
+                if abs(p1[i] - p2[i]) > 1e-14:
+                    if p1[i] < p2[i]:
+                        y1 = p1[i]
+                        y2 = p2[i]
+                    else:
+                        y1 = p2[i]
+                        y2 = p1[i]
+                    yl = xlb[i]
+                    yu = xub[i]
+                    rand = np.random.rand()
+                    beta = 1.0 + (2.0 * (y1 - yl) / (y2 - y1))
+                    alpha = 2.0 - pow(beta, -(eta + 1.0))
+                    if rand <= (1.0 / alpha):
+                        betaq = pow((rand * alpha), (1.0 / (eta + 1.0)))
+                    else:
+                        betaq = pow((1.0 / (2.0 - rand * alpha)), (1.0 / (eta + 1.0)))
+                    c1 = 0.5 * ((y1 + y2) - betaq * (y2 - y1))
+                    beta = 1.0 + (2.0 * (yu - y2) / (y2 - y1))
+                    alpha = 2.0 - pow(beta, -(eta + 1.0))
+                    if rand <= (1.0 / alpha):
+                        betaq = pow((rand * alpha), (1.0 / (eta + 1.0)))
+                    else:
+                        betaq = pow((1.0 / (2.0 - rand * alpha)), (1.0 / (eta + 1.0)))
+                    c2 = 0.5 * ((y1 + y2) + betaq * (y2 - y1))
+                    if c1 < yl:
+                        c1 = yl
+                    if c2 < yl:
+                        c2 = yl
+                    if c1 > yu:
+                        c1 = yu
+                    if c2 > yu:
+                        c2 = yu
+                    if np.random.rand() < 0.5:
+                        offspring[0, i] = c2
+                        offspring[1, i] = c1
+                    else:
+                        offspring[0, i] = c1
+                        offspring[1, i] = c2
+                else:
+                    offspring[0, i] = p1[i]
+                    offspring[1, i] = p2[i]
+            else:
+                offspring[0, i] = p1[i]
+                offspring[1, i] = p2[i]
+        return offspring
+
+    def polynomial_mutation(individual, eta=20):
+        """Polynomial mutation."""
+        mutant = individual.copy()
+        for j in range(N_P):
+            r = np.random.rand()
+            if r < 0.5:
+                delta = (2.0 * r)**(1.0 / (eta + 1.0)) - 1.0
+            else:
+                delta = 1.0 - (2.0 * (1.0 - r))**(1.0 / (eta + 1.0))
+            mutant[j] += delta * (xub[j] - xlb[j])
+            mutant[j] = np.clip(mutant[j], xlb[j], xub[j])
+        return mutant
+
+    parents = np.random.choice(POP_SIZE, size=(POP_SIZE // 2, 2), replace=True)
+    offspring = np.empty((POP_SIZE, N_P))
+
+    for i, (p1_idx, p2_idx) in enumerate(parents):
+        offspring[2 * i:2 * i + 2] = sbx_crossover(pops['individuals'][p1_idx], pops['individuals'][p2_idx])
+
+    for i in range(POP_SIZE):
+        offspring[i] = polynomial_mutation(offspring[i])
+
+    return offspring
+[2025-02-04 07:57:32,871][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using crossover and mutation operators.
+
+    Args:
+        pops (dict): Current population and their rankings.
+        search_trajectory (dict): Historical population data.
+        xlb (np.ndarray): Lower bounds for decision variables.
+        xub (np.ndarray): Upper bounds for decision variables.
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum generation number.
+
+    Returns:
+        np.ndarray: The new population.
+    """
+
+    def sbx_crossover(p1, p2, eta=15):
+        """Simulated Binary Crossover."""
+        offspring = np.empty((2, N_P))
+        for i in range(N_P):
+            if np.random.rand() < 0.5:
+                if abs(p1[i] - p2[i]) > 1e-14:
+                    if p1[i] < p2[i]:
+                        y1 = p1[i]
+                        y2 = p2[i]
+                    else:
+                        y1 = p2[i]
+                        y2 = p1[i]
+
+                    yl = xlb[i]
+                    yu = xub[i]
+                    rand = np.random.rand()
+                    beta = 1.0 + (2.0 * (y1 - yl) / (y2 - y1))
+                    alpha = 2.0 - pow(beta, -(eta + 1.0))
+                    if rand <= (1.0 / alpha):
+                        betaq = pow(rand * alpha, (1.0 / (eta + 1.0)))
+                    else:
+                        betaq = pow(1.0 / (2.0 - rand * alpha), (1.0 / (eta + 1.0)))
+
+                    c1 = 0.5 * ((y1 + y2) - betaq * (y2 - y1))
+
+                    beta = 1.0 + (2.0 * (yu - y2) / (y2 - y1))
+                    alpha = 2.0 - pow(beta, -(eta + 1.0))
+
+                    if rand <= (1.0 / alpha):
+                        betaq = pow((rand * alpha), (1.0 / (eta + 1.0)))
+                    else:
+                        betaq = pow(1.0 / (2.0 - rand * alpha), (1.0 / (eta + 1.0)))
+                    c2 = 0.5 * ((y1 + y2) + betaq * (y2 - y1))
+
+                    if c1 < yl:
+                        c1 = yl
+                    if c2 < yl:
+                        c2 = yl
+                    if c1 > yu:
+                        c1 = yu
+                    if c2 > yu:
+                        c2 = yu
+
+                    if np.random.rand() < 0.5:
+                        offspring[0, i] = c2
+                        offspring[1, i] = c1
+                    else:
+                        offspring[0, i] = c1
+                        offspring[1, i] = c2
+                else:
+                    offspring[0, i] = p1[i]
+                    offspring[1, i] = p2[i]
+            else:
+                offspring[0, i] = p1[i]
+                offspring[1, i] = p2[i]
+        return offspring
+
+
+    def polynomial_mutation(individual, eta=20):
+        """Polynomial Mutation."""
+        mutant = individual.copy()
+        for j in range(N_P):
+            r = np.random.rand()
+            if r < 0.5:
+                delta = (2.0 * r)**(1.0 / (eta + 1.0)) - 1.0
+            else:
+                delta = 1.0 - (2.0 * (1.0 - r))**(1.0 / (eta + 1.0))
+            mutant[j] = individual[j] + delta * (xub[j] - xlb[j])
+            mutant[j] = np.clip(mutant[j], xlb[j], xub[j])
+        return mutant
+
+    new_pop = np.zeros((POP_SIZE, N_P))
+    for i in range(0, POP_SIZE, 2):
+        parents = np.random.choice(POP_SIZE, 2, replace=False)
+        p1 = pops['individuals'][parents[0]]
+        p2 = pops['individuals'][parents[1]]
+        offspring = sbx_crossover(p1, p2)
+        new_pop[i] = polynomial_mutation(offspring[0])
+        new_pop[i+1] = polynomial_mutation(offspring[1])
+
+
+    return new_pop
+[2025-02-04 07:59:05,823][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using crossover and mutation operators.
+
+    Args:
+        pops (dict): Current population.
+        search_trajectory (dict): Search trajectory.
+        xlb (np.ndarray): Lower bounds of decision variables.
+        xub (np.ndarray): Upper bounds of decision variables.
+        POP_SIZE (int): Population size.
+        N_P (int): Number of decision variables.
+        current_gen (int): Current generation number.
+        max_gen (int): Maximum generation number.
+
+    Returns:
+        np.ndarray: New population.
+    """
+
+    def sbx_crossover(parent1, parent2, eta=15):
+        """Simulated Binary Crossover."""
+        offspring1 = np.zeros_like(parent1)
+        offspring2 = np.zeros_like(parent2)
+        for i in range(N_P):
+            if np.random.rand() < 0.5:
+                if abs(parent1[i] - parent2[i]) > 1e-14:
+                    if parent1[i] < parent2[i]:
+                        y1 = parent1[i]
+                        y2 = parent2[i]
+                    else:
+                        y1 = parent2[i]
+                        y2 = parent1[i]
+                    yl = xlb[i]
+                    yu = xub[i]
+                    rand = np.random.rand()
+                    beta = 1.0 + (2.0 * (y1 - yl) / (y2 - y1))
+                    alpha = 2.0 - pow(beta, -(eta + 1.0))
+                    if rand <= (1.0 / alpha):
+                        betaq = pow(rand * alpha, (1.0 / (eta + 1.0)))
+                    else:
+                        betaq = pow(1.0 / (2.0 - rand * alpha), (1.0 / (eta + 1.0)))
+                    c1 = 0.5 * ((y1 + y2) - betaq * (y2 - y1))
+                    beta = 1.0 + (2.0 * (yu - y2) / (y2 - y1))
+                    alpha = 2.0 - pow(beta, -(eta + 1.0))
+                    if rand <= (1.0 / alpha):
+                        betaq = pow(rand * alpha, (1.0 / (eta + 1.0)))
+                    else:
+                        betaq = pow(1.0 / (2.0 - rand * alpha), (1.0 / (eta + 1.0)))
+                    c2 = 0.5 * ((y1 + y2) + betaq * (y2 - y1))
+
+                    if c1 < yl:
+                        c1 = yl
+                    if c2 < yl:
+                        c2 = yl
+                    if c1 > yu:
+                        c1 = yu
+                    if c2 > yu:
+                        c2 = yu
+
+                    if np.random.rand() < 0.5:
+                        offspring1[i] = c2
+                        offspring2[i] = c1
+                    else:
+                        offspring1[i] = c1
+                        offspring2[i] = c2
+                else:
+                    offspring1[i] = parent1[i]
+                    offspring2[i] = parent2[i]
+            else:
+                offspring1[i] = parent1[i]
+                offspring2[i] = parent2[i]
+        return offspring1, offspring2
+
+    def polynomial_mutation(individual, pm=0.1, eta_m=20):
+        """Polynomial mutation."""
+        mutant = np.copy(individual)
+        for j in range(N_P):
+            if np.random.rand() <= pm:
+                y = individual[j]
+                yl = xlb[j]
+                yu = xub[j]
+                delta1 = (y - yl) / (yu - yl)
+                delta2 = (yu - y) / (yu - yl)
+                rand = np.random.rand()
+                mut_pow = 1.0 / (eta_m + 1.0)
+                if rand < 0.5:
+                    xy = 1.0 - delta1
+                    val = 2.0 * rand + (1.0 - 2.0 * rand) * (pow(xy, (eta_m + 1.0)))
+                    deltaq = pow(val, mut_pow) - 1.0
+                else:
+                    xy = 1.0 - delta2
+                    val = 2.0 * (1.0 - rand) + 2.0 * (rand - 0.5) * (pow(xy, (eta_m + 1.0)))
+                    deltaq = 1.0 - pow(val, mut_pow)
+
+                y = y + deltaq * (yu - yl)
+                if y < yl:
+                    y = yl
+                if y > yu:
+                    y = yu
+                mutant[j] = y
+        return mutant
+
+    parents_indices = np.random.choice(POP_SIZE, POP_SIZE, replace=True)
+    parents = pops['individuals'][parents_indices]
+
+    new_pop = np.zeros((POP_SIZE, N_P))
+    for i in range(0, POP_SIZE, 2):
+        parent1 = parents[i]
+        parent2 = parents[i+1]
+        offspring1, offspring2 = sbx_crossover(parent1, parent2)
+        new_pop[i] = polynomial_mutation(offspring1)
+        new_pop[i+1] = polynomial_mutation(offspring2)
+
+
+    new_pop = np.clip(new_pop, xlb, xub)  # Ensure bounds
+    return new_pop
+[2025-02-04 08:00:25,195][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: {}, search_trajectory: {}, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using an intelligent evolutionary strategy.
+
+    Args:
+        pops: Current population dictionary.
+        search_trajectory: Search trajectory dictionary.
+        xlb: Lower bounds of decision variables.
+        xub: Upper bounds of decision variables.
+        POP_SIZE: Population size.
+        N_P: Number of decision variables.
+        current_gen: Current generation number.
+        max_gen: Maximum generation number.
+
+    Returns:
+        A NumPy array representing the new population.
+    """
+
+    def sbx_crossover(parent1, parent2, eta=15):
+        """Simulated Binary Crossover."""
+        offspring1 = np.empty_like(parent1)
+        offspring2 = np.empty_like(parent2)
+        for i in range(N_P):
+            rand = np.random.rand()
+            if rand <= 0.5:
+                beta = (2 * rand) ** (1 / (eta + 1))
+            else:
+                beta = (1 / (2 * (1 - rand))) ** (1 / (eta + 1))
+            offspring1[i] = 0.5 * (((1 + beta) * parent1[i]) + ((1 - beta) * parent2[i]))
+            offspring2[i] = 0.5 * (((1 - beta) * parent1[i]) + ((1 + beta) * parent2[i]))
+        return offspring1, offspring2
+
+    def polynomial_mutation(individual, eta=20):
+        """Polynomial Mutation."""
+        mutant = individual.copy()
+        for i in range(N_P):
+            rand = np.random.rand()
+            if rand < 0.5:
+                delta = (2 * rand) ** (1 / (eta + 1)) - 1
+            else:
+                delta = 1 - (2 * (1 - rand)) ** (1 / (eta + 1))
+            mutant[i] += (xub[i] - xlb[i]) * delta
+        return mutant
+
+
+    # Selection
+    parents = []
+    indices = np.random.choice(POP_SIZE, POP_SIZE)
+    for i in range(POP_SIZE // 2):
+        parents.append((pops['individuals'][indices[2 * i]], pops['individuals'][indices[2 * i + 1]]))
+    
+
+    # Crossover
+    new_pop = []
+    for parent1, parent2 in parents:
+        offspring1, offspring2 = sbx_crossover(parent1, parent2)
+        new_pop.append(offspring1)
+        new_pop.append(offspring2)
+    new_pop = np.array(new_pop)
+
+    # Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = polynomial_mutation(new_pop[i])
+
+    # Checking and repairing
+    new_pop = np.clip(new_pop, xlb, xub)
+
+    return new_pop
+[2025-02-04 08:01:44,519][LLM_CodeGen_OP.py][line:108][INFO] import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generates the next generation of individuals using intelligent crossover and mutation.
+
+    :param pops: Current population (individuals and rankings).
+    :param search_trajectory: Historical search trajectory.
+    :param xlb: Lower bounds of decision variables.
+    :param xub: Upper bounds of decision variables.
+    :param POP_SIZE: Population size.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum generation number.
+    :return: New population.
+    """
+
+    def sbx_crossover(parent1, parent2, eta=15):
+        """Simulated Binary Crossover."""
+        offspring1 = np.empty_like(parent1)
+        offspring2 = np.empty_like(parent2)
+        for i in range(N_P):
+            u = np.random.rand()
+            if u <= 0.5:
+                beta = (2 * u)**(1 / (eta + 1))
+            else:
+                beta = (1 / (2 * (1 - u)))**(1 / (eta + 1))
+            offspring1[i] = 0.5 * ((1 + beta) * parent1[i] + (1 - beta) * parent2[i])
+            offspring2[i] = 0.5 * ((1 - beta) * parent1[i] + (1 + beta) * parent2[i])
+        return offspring1, offspring2
+
+    def polynomial_mutation(individual, eta=20):
+        """Polynomial Mutation."""
+        mutant = individual.copy()
+        for i in range(N_P):
+            u = np.random.rand()
+            if u <= 0.5:
+                delta = (2 * u)**(1 / (eta + 1)) - 1
+            else:
+                delta = 1 - (2 * (1 - u))**(1 / (eta + 1))
+            mutant[i] += (xub[i] - xlb[i]) * delta
+        return mutant
+
+
+
+    # Selection
+    parents_indices = np.random.choice(POP_SIZE, size=POP_SIZE, replace=True)  # Using random selection here. Replace with more sophisticated strategies.
+    parents = pops['individuals'][parents_indices]
+    
+    # Crossover
+    new_pop = np.empty((POP_SIZE, N_P))
+    for i in range(0, POP_SIZE, 2):
+        parent1 = parents[i]
+        parent2 = parents[i+1]
+        offspring1, offspring2 = sbx_crossover(parent1, parent2)
+        new_pop[i] = offspring1
+        new_pop[i + 1] = offspring2
+
+    # Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = polynomial_mutation(new_pop[i])
+
+    # Checking
+    new_pop = np.clip(new_pop, xlb, xub)
+
+    return new_pop
+[2025-02-04 08:01:44,522][interaction.py][line:71][INFO] evolving-----------------------------------
+[2025-02-04 14:04:39,802][interaction.py][line:133][INFO] finish

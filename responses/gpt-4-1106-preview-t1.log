@@ -1,0 +1,683 @@
+[2024-03-26 15:09:55,772][interaction.py][line:26][INFO] start
+[2024-03-26 15:11:08,318][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, 
+                    POP_SIZE: int, N_P: int, current_gen: int, max_gen: int) -> np.ndarray:
+    """
+    Generate the next generation for a multi-objective optimization problem using evolutionary strategies.
+    
+    :param pops: Current population and rankings
+    :param search_trajectory: Trajectory of the search for aiding in intelligent operator design
+    :param xlb: Lower bounds of decision variables
+    :param xub: Upper bounds of decision variables
+    :param POP_SIZE: Size of the population
+    :param N_P: Number of decision variables
+    :param current_gen: Current generation number
+    :param max_gen: Maximum number of generations
+    :return: New population as a numpy.ndarray
+    """
+
+    def select_parents(pops, search_trajectory, POP_SIZE):
+        # Your selection strategy here
+        # Example: Tournament selection
+        parents = []
+        for _ in range(POP_SIZE // 2):
+            p1 = pops['individuals'][np.random.randint(len(pops['individuals']))]
+            p2 = pops['individuals'][np.random.randint(len(pops['individuals']))]
+            parents.append((p1, p2))
+        return parents
+
+    def crossover(parents, N_P):
+        # Your crossover strategy here
+        # Example: Uniform crossover
+        offspring = []
+        for p1, p2 in parents:
+            child1, child2 = p1.copy(), p2.copy()
+            mask = np.random.rand(N_P) > 0.5
+            child1[mask], child2[mask] = child2[mask], child1[mask]
+            offspring.extend([child1, child2])
+        return np.array(offspring)
+
+    def mutate(offspring, xlb, xub, current_gen, max_gen):
+        # Your mutation strategy here
+        # Example: Gaussian mutation with decreasing variance
+        scale = (1 - current_gen / max_gen)  # Decreasing scale factor
+        for i in range(len(offspring)):
+            if np.random.rand() < 0.1:  # Mutation probability
+                mutation = np.random.normal(0, scale, N_P)
+                offspring[i] += mutation
+                offspring[i] = np.clip(offspring[i], xlb, xub)  # Boundary check
+        return offspring
+
+    # Part 1: Selection
+    parents = select_parents(pops, search_trajectory, POP_SIZE)
+
+    # Part 2: Crossover
+    new_pop = crossover(parents, N_P)
+
+    # Part 3: Mutation
+    new_pop = mutate(new_pop, xlb, xub, current_gen, max_gen)
+
+    return new_pop
+
+[2024-03-26 15:12:12,107][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolves a population for the next generation using selection, crossover, and mutation strategies.
+    
+    :param pops: Current population and rankings
+    :param search_trajectory: Trajectory of the search process
+    :param xlb: Lower bounds of decision variables
+    :param xub: Upper bounds of decision variables
+    :param POP_SIZE: Size of the population
+    :param N_P: Number of decision variables
+    :param current_gen: Current generation number
+    :param max_gen: Maximum number of generations
+    :return: New population array
+    """
+
+    def selection(population):
+        # Tournament selection
+        selected_indices = np.random.choice(range(len(population)), size=POP_SIZE, replace=True)
+        return population[selected_indices]
+
+    def crossover(parent1, parent2):
+        # Uniform crossover
+        mask = np.random.rand(N_P) < 0.5
+        offspring1 = np.where(mask, parent1, parent2)
+        offspring2 = np.where(mask, parent2, parent1)
+        return offspring1, offspring2
+
+    def mutation(individual):
+        # Gaussian mutation
+        mutation_strength = (xub - xlb) * 0.1 * (1 - current_gen / max_gen)  # Decreasing mutation strength over generations
+        return np.clip(individual + np.random.randn(N_P) * mutation_strength, xlb, xub)
+
+    def validate_bounds(individual):
+        return np.clip(individual, xlb, xub)
+
+    # Part 1: Selection
+    if search_trajectory['individuals'] is not None:
+        combined_population = np.vstack((pops['individuals'], search_trajectory['individuals']))
+    else:
+        combined_population = pops['individuals']
+    parents = selection(combined_population)
+
+    # Part 2: Crossover
+    new_pop = np.empty((POP_SIZE, N_P))
+    for i in range(0, POP_SIZE, 2):
+        parent1, parent2 = parents[i], parents[(i + 1) % POP_SIZE]  # Ensuring even index always has a pair
+        new_pop[i], new_pop[i + 1] = crossover(parent1, parent2)
+
+    # Part 3: Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = mutation(new_pop[i])
+
+    # Validation
+    new_pop = np.apply_along_axis(validate_bounds, 1, new_pop)
+
+    return new_pop
+
+[2024-03-26 15:13:28,813][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolve a new generation of individuals for a multi-objective problem using intelligent evolutionary strategies.
+
+    :param pops: Current population and its rankings.
+    :param search_trajectory: The search trajectory containing past individuals and rankings.
+    :param xlb: Lower bounds of the decision variables.
+    :param xub: Upper bounds of the decision variables.
+    :param POP_SIZE: Population size.
+    :param N_P: Number of decision variables.
+    :param current_gen: The current generation number.
+    :param max_gen: The maximum number of generations.
+    :return: New population as a numpy.ndarray with shape (POP_SIZE, N_P).
+    """
+
+    def selection(population):
+        """
+        Select individuals for crossover.
+        """
+        # Here you can implement any selection strategy, e.g., tournament selection, roulette wheel, etc.
+        # For simplicity, we use a random selection strategy.
+        selected_indices = np.random.choice(population.shape[0], size=POP_SIZE, replace=True)
+        return population[selected_indices]
+
+    def crossover(parent1, parent2):
+        """
+        Perform crossover between two individuals.
+        """
+        # Here you can implement any crossover strategy, e.g., single-point, two-point, uniform crossover, etc.
+        # For simplicity, we use a uniform crossover.
+        # Create a mask for crossover
+        crossover_mask = np.random.rand(N_P) < 0.5
+        # Generate offspring
+        offspring1 = np.where(crossover_mask, parent1, parent2)
+        offspring2 = np.where(crossover_mask, parent2, parent1)
+        return offspring1, offspring2
+
+    def mutation(individual):
+        """
+        Mutate an individual.
+        """
+        # Here you can implement any mutation strategy, e.g., bit-flip, Gaussian, etc.
+        # For simplicity, we use a uniform mutation.
+        mutation_mask = np.random.rand(N_P) < 1/N_P
+        individual[mutation_mask] = xlb[mutation_mask] + np.random.rand(np.sum(mutation_mask)) * (xub[mutation_mask] - xlb[mutation_mask])
+        return individual
+
+    def ensure_bounds(individual):
+        """
+        Ensure the individual respects the problem's bounds.
+        """
+        return np.clip(individual, xlb, xub)
+
+    # Part 1: Selection
+    if search_trajectory['individuals'] is not None and search_trajectory['rankings'] is not None:
+        combined_population = np.vstack((pops['individuals'], search_trajectory['individuals']))
+    else:
+        combined_population = pops['individuals']
+    selected_parents = selection(combined_population)
+
+    # Part 2: Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1 = selected_parents[i]
+        parent2 = selected_parents[(i+1) % POP_SIZE]  # Ensure we have a pair
+        offspring1, offspring2 = crossover(parent1, parent2)
+        new_pop.append(offspring1)
+        new_pop.append(offspring2)
+    new_pop = np.array(new_pop)
+
+    # Part 3: Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = mutation(new_pop[i])
+        new_pop[i] = ensure_bounds(new_pop[i])
+
+    return new_pop
+
+[2024-03-26 15:14:41,516][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolves a population for multi-objective optimization using evolutionary strategies.
+    
+    :param pops: Current population and rankings.
+    :param search_trajectory: Trajectory of the search.
+    :param xlb: Lower bounds of the decision variables.
+    :param xub: Upper bounds of the decision variables.
+    :param POP_SIZE: Size of the population.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum number of generations.
+    :return: New population as a numpy.ndarray.
+    """
+    
+    def select_parents(pops, search_trajectory):
+        # Here you would implement your selection strategy, potentially using tournament selection, roulette wheel, etc.
+        # For simplicity, we'll just shuffle the current population.
+        indices = np.arange(pops['individuals'].shape[0])
+        np.random.shuffle(indices)
+        return pops['individuals'][indices[:POP_SIZE // 2]], pops['individuals'][indices[POP_SIZE // 2:POP_SIZE]]
+
+    def crossover(parents1, parents2):
+        # Here you would implement your crossover strategy, such as simulated binary crossover (SBX), uniform crossover, etc.
+        # For simplicity, we'll perform a one-point crossover.
+        offspring = np.empty((POP_SIZE, N_P))
+        crossover_point = np.random.randint(1, N_P, size=POP_SIZE // 2)
+        for i in range(POP_SIZE // 2):
+            offspring[2*i, :] = np.concatenate([parents1[i, :crossover_point[i]], parents2[i, crossover_point[i]:]])
+            offspring[2*i+1, :] = np.concatenate([parents2[i, :crossover_point[i]], parents1[i, crossover_point[i]:]])
+        return offspring
+
+    def mutate(offspring):
+        # Here you would implement your mutation strategy, such as polynomial mutation, gaussian mutation, etc.
+        # For simplicity, we'll perform random mutation.
+        mutation_rate = 0.1
+        mutation_size = (xub - xlb) * mutation_rate
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation = (np.random.rand(N_P) - 0.5) * mutation_size
+                offspring[i, :] += mutation
+        return offspring
+
+    def validate_bounds(offspring, xlb, xub):
+        # Ensure that the offspring are within the specified bounds
+        np.clip(offspring, xlb, xub, out=offspring)
+        return offspring
+
+    # Part 1: Selection
+    parents1, parents2 = select_parents(pops, search_trajectory)
+    
+    # Part 2: Crossover
+    new_pop = crossover(parents1, parents2)
+    
+    # Part 3: Mutation
+    new_pop = mutate(new_pop)
+    
+    # Validation
+    new_pop = validate_bounds(new_pop, xlb, xub)
+    
+    return new_pop
+
+[2024-03-26 15:15:57,270][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolve a superior evolutionary operator for tackling multi-objective problems.
+
+    :param pops: Current population and rankings.
+    :param search_trajectory: Trajectory of the evolutionary search.
+    :param xlb: Lower bounds of decision variables.
+    :param xub: Upper bounds of decision variables.
+    :param POP_SIZE: Population size.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum number of generations.
+    :return: New population as a numpy.ndarray with shape (POP_SIZE, N_P).
+    """
+
+    def select_parents(pops, search_trajectory, POP_SIZE):
+        # Selection strategy can be a tournament selection, roulette wheel, etc.
+        # For simplicity, we use random selection here.
+        if search_trajectory['individuals'] is not None:
+            combined_population = np.vstack((pops['individuals'], search_trajectory['individuals']))
+        else:
+            combined_population = pops['individuals']
+        indices = np.random.choice(combined_population.shape[0], POP_SIZE, replace=True)
+        return combined_population[indices]
+
+    def crossover(parents, POP_SIZE, N_P):
+        # Crossover strategy can be single-point, uniform, etc.
+        # For simplicity, we use uniform crossover here.
+        new_pop = np.empty((POP_SIZE, N_P))
+        for i in range(0, POP_SIZE, 2):
+            p1, p2 = parents[i], parents[i+1]
+            mask = np.random.rand(N_P) > 0.5
+            offspring1, offspring2 = p1.copy(), p2.copy()
+            offspring1[mask], offspring2[mask] = offspring2[mask], offspring1[mask]
+            new_pop[i], new_pop[i+1] = offspring1, offspring2
+        return new_pop
+
+    def mutate(new_pop, xlb, xub, POP_SIZE, N_P):
+        # Mutation strategy can be Gaussian, polynomial, etc.
+        # For simplicity, we use uniform mutation here.
+        mutation_rate = 0.1
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation = np.random.uniform(xlb, xub)
+                new_pop[i] += mutation
+                # Ensure the mutated individual is within bounds
+                new_pop[i] = np.clip(new_pop[i], xlb, xub)
+        return new_pop
+
+    # Part 1: Selection
+    parents = select_parents(pops, search_trajectory, POP_SIZE)
+
+    # Part 2: Crossover
+    new_pop = crossover(parents, POP_SIZE, N_P)
+
+    # Part 3: Mutation
+    new_pop = mutate(new_pop, xlb, xub, POP_SIZE, N_P)
+
+    return new_pop
+
+[2024-03-26 15:19:27,301][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Generate the next generation population for a multi-objective optimization problem using evolutionary strategies.
+
+    :param pops: Current population and rankings.
+    :param search_trajectory: Trajectory of the search for intelligent operator design.
+    :param xlb: Lower bounds for decision variables.
+    :param xub: Upper bounds for decision variables.
+    :param POP_SIZE: Size of the population.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum number of generations.
+    :return: New population as a numpy.ndarray.
+    """
+    
+    # Helper functions
+    def select_parents(pops, search_trajectory, POP_SIZE, N_P):
+        # Implement a selection strategy (e.g., tournament selection, roulette wheel, etc.)
+        # For simplicity, we'll use random selection here.
+        combined_individuals = pops['individuals']
+        if search_trajectory.get('individuals') is not None:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+        selected_indices = np.random.choice(combined_individuals.shape[0], size=POP_SIZE, replace=True)
+        return combined_individuals[selected_indices]
+    
+    def crossover(parents, POP_SIZE, N_P):
+        # Implement a crossover strategy (e.g., single-point, uniform, etc.)
+        # For simplicity, we'll use uniform crossover here.
+        offspring = np.empty((POP_SIZE, N_P))
+        for i in range(0, POP_SIZE, 2):
+            mask = np.random.rand(N_P) > 0.5
+            offspring[i] = parents[i] * mask + parents[i+1] * ~mask
+            offspring[i+1] = parents[i+1] * mask + parents[i] * ~mask
+        return offspring
+    
+    def mutate(offspring, xlb, xub, current_gen, max_gen, N_P):
+        # Implement a mutation strategy (e.g., polynomial mutation, Gaussian mutation, etc.)
+        # For simplicity, we'll use a simple random mutation here.
+        mutation_rate = 1.0 / N_P  # Mutation rate can be adjusted
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation_value = np.random.uniform(-1, 1, N_P)
+                offspring[i] += mutation_value
+                # Ensure bounds are maintained
+                offspring[i] = np.clip(offspring[i], xlb, xub)
+        return offspring
+    
+    # Part 1: Selection
+    parents = select_parents(pops, search_trajectory, POP_SIZE, N_P)
+    
+    # Part 2: Crossover
+    new_pop = crossover(parents, POP_SIZE, N_P)
+    
+    # Part 3: Mutation
+    new_pop = mutate(new_pop, xlb, xub, current_gen, max_gen, N_P)
+    
+    # Validation: Ensure the new population is within the bounds
+    new_pop = np.clip(new_pop, xlb, xub)
+    
+    return new_pop
+
+[2024-03-26 15:21:50,592][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolves a population for the next generation using selection, crossover, and mutation strategies.
+
+    :param pops: Current population and rankings
+    :param search_trajectory: Trajectory of search with past individuals and rankings
+    :param xlb: Lower bound of decision variables
+    :param xub: Upper bound of decision variables
+    :param POP_SIZE: Population size
+    :param N_P: Number of decision variables
+    :param current_gen: Current generation number
+    :param max_gen: Maximum number of generations
+    :return: New population as a numpy.ndarray
+    """
+
+    def selection(pops, search_trajectory, POP_SIZE, N_P):
+        # Ensure that search_trajectory has individuals to combine
+        if search_trajectory['individuals'] is not None and search_trajectory['individuals'].shape[1] == N_P:
+            combined_individuals = np.vstack((pops['individuals'], search_trajectory['individuals']))
+            combined_rankings = np.hstack((pops['rankings'], search_trajectory['rankings']))
+        else:
+            combined_individuals = pops['individuals']
+            combined_rankings = pops['rankings']
+
+        # Sort combined population based on rankings
+        sorted_indices = np.argsort(combined_rankings)
+        sorted_individuals = combined_individuals[sorted_indices]
+
+        # Select POP_SIZE individuals based on their rankings
+        selected_individuals = sorted_individuals[:POP_SIZE]
+        return selected_individuals
+
+    def crossover(parents, POP_SIZE, N_P):
+        offspring = np.empty((POP_SIZE, N_P))
+        for i in range(0, POP_SIZE, 2):
+            # Randomly choose crossover point
+            crossover_point = np.random.randint(1, N_P)
+            
+            # Perform single-point crossover
+            offspring[i, :crossover_point] = parents[i, :crossover_point]
+            offspring[i, crossover_point:] = parents[i+1, crossover_point:]
+            offspring[i+1, :crossover_point] = parents[i+1, :crossover_point]
+            offspring[i+1, crossover_point:] = parents[i, crossover_point:]
+        return offspring
+
+    def mutation(offspring, xlb, xub, current_gen, max_gen):
+        mutation_rate = 1.0 / (current_gen + 1)  # Decreasing mutation rate
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation_point = np.random.randint(N_P)
+                # Perform uniform mutation
+                offspring[i, mutation_point] = np.random.uniform(xlb[mutation_point], xub[mutation_point])
+        return offspring
+
+    def validate_bounds(individuals, xlb, xub):
+        return np.clip(individuals, xlb, xub)
+
+    # Part 1: Selection
+    parent_individuals = selection(pops, search_trajectory, POP_SIZE, N_P)
+
+    # Part 2: Crossover
+    new_pop = crossover(parent_individuals, POP_SIZE, N_P)
+
+    # Part 3: Mutation
+    new_pop = mutation(new_pop, xlb, xub, current_gen, max_gen)
+
+    # Validate bounds
+    new_pop = validate_bounds(new_pop, xlb, xub)
+
+    return new_pop
+
+[2024-03-26 15:22:57,248][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, search_trajectory: dict, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolves a new population using selection, crossover, and mutation strategies.
+    
+    :param pops: Current population and their rankings
+    :param search_trajectory: Trajectory of the evolutionary search
+    :param xlb: Lower bounds for decision variables
+    :param xub: Upper bounds for decision variables
+    :param POP_SIZE: Size of the population
+    :param N_P: Number of decision variables
+    :param current_gen: Current generation number
+    :param max_gen: Maximum number of generations
+    :return: New population as a numpy.ndarray
+    """
+    
+    def selection(population):
+        # Tournament selection
+        selected_indices = np.random.choice(range(population.shape[0]), size=POP_SIZE, replace=True)
+        return population[selected_indices]
+    
+    def crossover(parent1, parent2):
+        # Uniform crossover
+        mask = np.random.rand(N_P) < 0.5
+        offspring1 = np.where(mask, parent1, parent2)
+        offspring2 = np.where(mask, parent2, parent1)
+        return offspring1, offspring2
+    
+    def mutation(individual):
+        # Polynomial mutation
+        eta_m = 20
+        rand = np.random.rand(N_P)
+        delta = np.where(rand < 0.5,
+                         (2*rand)**(1/(eta_m+1)) - 1,
+                         1 - (2*(1 - rand))**(1/(eta_m+1)))
+        mutant = individual + delta * (xub - xlb)
+        return mutant
+    
+    def validate_bounds(individual):
+        # Ensure individual is within bounds
+        return np.clip(individual, xlb, xub)
+    
+    # Part 1: Selection
+    parents = selection(pops['individuals'])
+    new_pop = np.empty((POP_SIZE, N_P))
+    
+    # Part 2: Crossover
+    for i in range(0, POP_SIZE, 2):
+        parent1, parent2 = parents[i], parents[(i+1) % POP_SIZE]
+        offspring1, offspring2 = crossover(parent1, parent2)
+        new_pop[i] = validate_bounds(offspring1)
+        new_pop[i+1] = validate_bounds(offspring2)
+    
+    # Part 3: Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = validate_bounds(mutation(new_pop[i]))
+    
+    return new_pop
+
+[2024-03-26 15:24:08,996][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, search_trajectory: {}, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolves a new generation of individuals for multi-objective optimization problems using evolutionary operators.
+    :param pops: Current population and rankings
+    :param search_trajectory: Historical search trajectory
+    :param xlb: Lower bounds of decision variables
+    :param xub: Upper bounds of decision variables
+    :param POP_SIZE: Population size
+    :param N_P: Number of decision variables
+    :param current_gen: Current generation number
+    :param max_gen: Maximum number of generations
+    :return: New population as a numpy.ndarray
+    """
+
+    def selection(population):
+        """
+        Selects parent individuals from the current population for crossover.
+        :param population: The current population
+        :return: Selected parent individuals
+        """
+        # Here you can implement any selection strategy, for example, tournament selection.
+        # For simplicity, we'll use random selection.
+        indices = np.arange(population.shape[0])
+        selected_parents = population[np.random.choice(indices, POP_SIZE, replace=True), :]
+        return selected_parents
+
+    def crossover(parents):
+        """
+        Performs crossover on pairs of parent individuals.
+        :param parents: Pairs of parent individuals
+        :return: Offspring population
+        """
+        # Implementing a simple uniform crossover
+        offspring = np.empty((POP_SIZE, N_P))
+        for i in range(0, POP_SIZE, 2):
+            p1, p2 = parents[i], parents[i + 1]
+            cross_points = np.random.rand(N_P) < 0.5
+            offspring[i] = p1 * cross_points + p2 * (~cross_points)
+            offspring[i + 1] = p1 * (~cross_points) + p2 * cross_points
+        return offspring
+
+    def mutation(offspring):
+        """
+        Applies mutation to the offspring population.
+        :param offspring: The offspring population
+        :return: Mutated offspring population
+        """
+        # Implementing a simple uniform mutation
+        for i in range(POP_SIZE):
+            if np.random.rand() < 0.1:  # Mutation probability
+                mutation_points = np.random.rand(N_P) < 0.1  # Mutation points
+                offspring[i] += mutation_points * np.random.uniform(-1, 1, N_P)
+        return offspring
+
+    def validate_bounds(individuals):
+        """
+        Ensures that each individual's decision variables are within the specified bounds.
+        :param individuals: Population of individuals
+        :return: Population with valid decision variables
+        """
+        np.clip(individuals, xlb, xub, out=individuals)
+        return individuals
+
+    # Part 1: Selection
+    parent_individuals = selection(pops['individuals'])
+
+    # Part 2: Crossover
+    new_pop = crossover(parent_individuals)
+
+    # Part 3: Mutation
+    new_pop = mutation(new_pop)
+
+    # Validation
+    new_pop = validate_bounds(new_pop)
+
+    return new_pop
+
+[2024-03-26 15:25:47,179][utils.py][line:107][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, search_trajectory: {}, xlb: np.ndarray, xub: np.ndarray, POP_SIZE: int, N_P: int, current_gen: int, max_gen: int):
+    """
+    Evolve a new population for multi-objective optimization using intelligent evolutionary operators.
+    
+    :param pops: Current population and rankings.
+    :param search_trajectory: Trajectory of the search.
+    :param xlb: Lower bounds of decision variables.
+    :param xub: Upper bounds of decision variables.
+    :param POP_SIZE: Size of the population.
+    :param N_P: Number of decision variables.
+    :param current_gen: Current generation number.
+    :param max_gen: Maximum number of generations.
+    :return: New population array with shape (POP_SIZE, N_P).
+    """
+    
+    def select_parents():
+        # Implement parent selection strategy here
+        # For simplicity, we'll use tournament selection from the current population
+        tournament_size = 2
+        parents_indices = np.random.choice(POP_SIZE, size=(POP_SIZE // 2, tournament_size), replace=True)
+        parents = []
+        for indices in parents_indices:
+            idx = indices[np.argmin(pops['rankings'][indices])]
+            parents.append(pops['individuals'][idx])
+        return np.array(parents)
+    
+    def crossover(parents):
+        # Implement crossover strategy here
+        # For simplicity, we'll use uniform crossover
+        offspring = []
+        for i in range(0, POP_SIZE, 2):
+            parent1, parent2 = parents[i // 2], parents[(i + 1) // 2]
+            mask = np.random.rand(N_P) < 0.5
+            child1 = np.where(mask, parent1, parent2)
+            child2 = np.where(mask, parent2, parent1)
+            offspring.append(child1)
+            offspring.append(child2)
+        return np.array(offspring)
+    
+    def mutate(offspring):
+        # Implement mutation strategy here
+        # For simplicity, we'll use uniform mutation
+        mutation_rate = 1.0 / N_P
+        for i in range(POP_SIZE):
+            if np.random.rand() < mutation_rate:
+                mutation_point = np.random.randint(N_P)
+                offspring[i, mutation_point] = np.random.uniform(xlb[mutation_point], xub[mutation_point])
+        return offspring
+    
+    def validate_bounds(individuals):
+        # Ensure that each individual is within the specified bounds
+        return np.clip(individuals, xlb, xub)
+    
+    # Part 1: Selection
+    parent_individuals = select_parents()
+    
+    # Part 2: Crossover
+    new_pop = crossover(parent_individuals)
+    
+    # Part 3: Mutation
+    new_pop = mutate(new_pop)
+    
+    # Validation
+    new_pop = validate_bounds(new_pop)
+    
+    return new_pop
+
+[2024-03-26 15:25:47,180][interaction.py][line:33][INFO] evolving-----------------------------------
+[2024-03-26 15:29:53,341][interaction.py][line:33][INFO] evolving-----------------------------------
+[2024-03-26 19:50:35,429][interaction.py][line:73][INFO] finish

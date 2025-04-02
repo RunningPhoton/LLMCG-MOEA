@@ -1,0 +1,711 @@
+[2025-01-21 18:28:38,044][interaction.py][line:63][INFO] start
+[2025-01-21 18:30:25,044][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    def tournament_selection(pop, rankings, num_parents):
+        selected = []
+        for _ in range(num_parents):
+            i, j = np.random.choice(range(len(pop)), 2, replace=False)
+            selected.append(pop[i] if rankings[i] < rankings[j] else pop[j])
+        return np.array(selected)
+
+    def crossover(parents):
+        offspring = []
+        for i in range(0, parents.shape[0], 2):
+            parent1 = parents[i]
+            parent2 = parents[i+1] if i+1 < parents.shape[0] else parents[0]
+            cross_point = np.random.randint(1, N_P-1)
+            child1 = np.concatenate([parent1[:cross_point], parent2[cross_point:]])
+            child2 = np.concatenate([parent2[:cross_point], parent1[cross_point:]])
+            offspring.append(child1)
+            offspring.append(child2)
+        return np.array(offspring)
+
+    def mutation(offspring):
+        mutation_rate = 1.0 / N_P
+        for i in range(offspring.shape[0]):
+            if np.random.rand() < mutation_rate:
+                mut_point = np.random.randint(0, N_P)
+                offspring[i, mut_point] = 1 - offspring[i, mut_point]
+        return offspring
+
+    def repair_and_check(new_pop):
+        for i in range(new_pop.shape[0]):
+            while np.dot(W, new_pop[i]) > C:
+                overweight_items = np.where((new_pop[i] == 1) & (W > 0))[0]
+                if overweight_items.size == 0:
+                    break
+                item_to_remove = np.random.choice(overweight_items)
+                new_pop[i, item_to_remove] = 0
+            new_pop[i] = np.clip(new_pop[i], 0, 1)
+        return new_pop.astype(np.int32)
+
+    # Subsection Selection
+    parents = tournament_selection(pops['individuals'], pops['rankings'], POP_SIZE)
+
+    # Subsection Crossover
+    new_pop = crossover(parents)
+
+    # Subsection Mutation
+    new_pop = mutation(new_pop)
+
+    # Subsection Checking
+    new_pop = repair_and_check(new_pop)
+
+    return new_pop
+
+[2025-01-21 18:33:26,575][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Generates the next population for the multi-objective knapsack problem using evolutionary strategies.
+    """
+    
+    def tournament_selection(rankings, tournament_size=2):
+        """
+        Tournament selection based on rankings.
+        """
+        selected_indices = []
+        for _ in range(POP_SIZE):
+            participants = np.random.choice(range(len(rankings)), tournament_size, replace=False)
+            selected = participants[np.argmin(rankings[participants])]
+            selected_indices.append(selected)
+        return selected_indices
+    
+    def crossover(parent1, parent2):
+        """
+        Single point crossover.
+        """
+        point = np.random.randint(1, N_P)
+        child1 = np.concatenate((parent1[:point], parent2[point:]))
+        child2 = np.concatenate((parent2[:point], parent1[point:]))
+        return child1, child2
+    
+    def mutate(individual, mutation_rate=0.1):
+        """
+        Mutation with a given mutation rate.
+        """
+        for i in range(N_P):
+            if np.random.rand() < mutation_rate:
+                individual[i] = 1 - individual[i]
+        return individual
+    
+    def repair(individual):
+        """
+        Repair strategy to maintain feasibility with respect to the knapsack capacity.
+        """
+        while np.dot(individual, W) > C:
+            selected_items = np.where(individual == 1)[0]
+            individual[np.random.choice(selected_items)] = 0
+        return individual
+    
+    def check_and_repair(population):
+        """
+        Check and repair the population to ensure feasibility.
+        """
+        for i in range(len(population)):
+            population[i] = repair(population[i])
+        return population
+    
+    # Selection
+    selected_indices = tournament_selection(pops['rankings'])
+    parents = pops['individuals'][selected_indices]
+    
+    # Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1, parent2 = parents[i], parents[i+1]
+        child1, child2 = crossover(parent1, parent2)
+        new_pop.extend([child1, child2])
+    new_pop = np.array(new_pop, dtype=np.int32)
+    
+    # Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = mutate(new_pop[i])
+    
+    # Checking and repairing
+    new_pop = check_and_repair(new_pop)
+    
+    return new_pop
+
+[2025-01-21 18:35:03,807][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Evolves a population for the multi-objective knapsack problem using selection, crossover, and mutation operators.
+    """
+
+    def tournament_selection(rankings, tournament_size=2):
+        """
+        Selects parents using tournament selection.
+        """
+        selected_indices = []
+        for _ in range(POP_SIZE // 2):
+            participants = np.random.choice(POP_SIZE, tournament_size, replace=False)
+            winner = participants[np.argmin(rankings[participants])]
+            selected_indices.append(winner)
+        return selected_indices
+
+    def crossover(parent1, parent2):
+        """
+        Performs crossover between two parents to produce two offspring.
+        """
+        crossover_point = np.random.randint(1, N_P)
+        offspring1 = np.concatenate((parent1[:crossover_point], parent2[crossover_point:]))
+        offspring2 = np.concatenate((parent2[:crossover_point], parent1[crossover_point:]))
+        return offspring1, offspring2
+
+    def mutate(offspring):
+        """
+        Mutates an offspring by flipping a bit with a low probability.
+        """
+        mutation_rate = 1.0 / N_P
+        for i in range(N_P):
+            if np.random.rand() < mutation_rate:
+                offspring[i] = 1 - offspring[i]
+        return offspring
+
+    def repair(individual):
+        """
+        Repairs an individual if it violates the weight constraint.
+        """
+        while np.dot(individual, W) > C:
+            overweight_items = np.where((individual == 1) & (W > 0))[0]
+            item_to_remove = np.random.choice(overweight_items)
+            individual[item_to_remove] = 0
+        return individual
+
+    selected_indices = tournament_selection(pops['rankings'])
+    new_pop = np.zeros((POP_SIZE, N_P), dtype=np.int32)
+
+    for i in range(0, POP_SIZE, 2):
+        parent1 = pops['individuals'][selected_indices[i // 2]]
+        parent2 = pops['individuals'][selected_indices[(i // 2 + 1) % (POP_SIZE // 2)]]
+        offspring1, offspring2 = crossover(parent1, parent2)
+        new_pop[i] = mutate(offspring1)
+        new_pop[i + 1] = mutate(offspring2)
+
+    # Repair and ensure binary representation
+    for i in range(POP_SIZE):
+        new_pop[i] = repair(new_pop[i])
+        new_pop[i] = np.clip(new_pop[i], 0, 1)
+
+    return new_pop
+
+[2025-01-21 18:36:37,894][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Evolve the population for the next generation using selection, crossover, mutation, and checking.
+    """
+
+    def tournament_selection(rankings, tournament_size=2):
+        """
+        Tournament selection based on the rankings.
+        """
+        selected_indices = []
+        for _ in range(POP_SIZE // 2):
+            participants = np.random.choice(POP_SIZE, tournament_size, replace=False)
+            winner = participants[np.argmin(rankings[participants])]
+            selected_indices.append(winner)
+        return selected_indices
+
+    def crossover(parent1, parent2):
+        """
+        Perform uniform crossover on two parents.
+        """
+        mask = np.random.rand(N_P) < 0.5
+        child1 = np.where(mask, parent1, parent2)
+        child2 = np.where(mask, parent2, parent1)
+        return child1, child2
+
+    def mutate(individual, mutation_rate=0.1):
+        """
+        Mutate an individual with a given mutation rate.
+        """
+        for i in range(N_P):
+            if np.random.rand() < mutation_rate:
+                individual[i] = 1 - individual[i]
+        return individual
+
+    def repair(individual):
+        """
+        Repair the individual so that it satisfies the weight constraint.
+        """
+        while np.dot(individual, W) > C:
+            # Randomly remove items until the knapsack is not overloaded
+            overweight_items = np.where((individual == 1) & (W > 0))[0]
+            if overweight_items.size == 0:
+                break
+            item_to_remove = np.random.choice(overweight_items)
+            individual[item_to_remove] = 0
+        return individual
+
+    # Subsection Selection
+    selected_indices = tournament_selection(pops['rankings'])
+    parents = pops['individuals'][selected_indices]
+
+    # Subsection Crossover
+    new_pop = []
+    for i in range(0, len(parents), 2):
+        parent1, parent2 = parents[i], parents[i+1]
+        child1, child2 = crossover(parent1, parent2)
+        new_pop.extend([child1, child2])
+
+    # Convert list to numpy array for vectorized operations
+    new_pop = np.array(new_pop, dtype=np.int32)
+
+    # Subsection Mutation
+    new_pop = np.array([mutate(individual) for individual in new_pop], dtype=np.int32)
+
+    # Subsection Checking
+    new_pop = np.array([repair(individual) for individual in new_pop], dtype=np.int32)
+
+    # Ensure all values are either 0 or 1
+    new_pop = np.clip(new_pop, 0, 1)
+
+    return new_pop
+
+[2025-01-21 18:37:48,699][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Evolves a population for the multi-objective knapsack problem using evolutionary operators.
+
+    :param pops: The current population and their rankings.
+    :param W: The weights of the items.
+    :param C: The capacity of the knapsack.
+    :param V: The values of the items for each objective.
+    :param POP_SIZE: The size of the population.
+    :param N_P: The number of decision variables (items).
+    :return: A new population that may achieve superior results on the multi-objective knapsack problems.
+    """
+
+    def tournament_selection(pops, k=2):
+        """
+        Selects parents using tournament selection.
+        """
+        selected_parents = []
+        for _ in range(POP_SIZE // 2):
+            tournament = np.random.choice(POP_SIZE, k, replace=False)
+            best_individual = np.argmin(pops['rankings'][tournament])
+            selected_parents.append(pops['individuals'][tournament[best_individual]])
+        return np.array(selected_parents)
+
+    def crossover(parents):
+        """
+        Performs crossover on the parent individuals to generate offspring.
+        """
+        offspring = []
+        for i in range(0, len(parents), 2):
+            parent1, parent2 = parents[i], parents[i+1]
+            cross_point = np.random.randint(1, N_P)
+            child1 = np.concatenate([parent1[:cross_point], parent2[cross_point:]])
+            child2 = np.concatenate([parent2[:cross_point], parent1[cross_point:]])
+            offspring.extend([child1, child2])
+        return np.array(offspring)
+
+    def mutate(offspring, mutation_rate=0.1):
+        """
+        Applies mutation to the offspring population.
+        """
+        for i in range(len(offspring)):
+            if np.random.rand() < mutation_rate:
+                mutation_point = np.random.randint(N_P)
+                offspring[i][mutation_point] = 1 - offspring[i][mutation_point]
+        return offspring
+
+    def repair(offspring):
+        """
+        Repairs the offspring to ensure they meet the knapsack constraints.
+        """
+        for i in range(len(offspring)):
+            while np.dot(W, offspring[i]) > C:
+                # Find items that are included and remove one randomly
+                included_items = np.where(offspring[i] == 1)[0]
+                if included_items.size:
+                    offspring[i][np.random.choice(included_items)] = 0
+        return offspring
+
+    # Selection
+    parents = tournament_selection(pops)
+
+    # Crossover
+    offspring = crossover(parents)
+
+    # Mutation
+    offspring = mutate(offspring)
+
+    # Repair and Checking
+    new_pop = repair(offspring).astype(np.int32)
+
+    return new_pop
+
+[2025-01-21 18:40:49,224][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Generate a new population for the multi-objective knapsack problem using evolutionary strategies.
+
+    :param pops: The current population and rankings.
+    :param W: The weights of the items.
+    :param C: The maximum weight capacity of the knapsack.
+    :param V: The profit values of the items.
+    :param POP_SIZE: The size of the population.
+    :param N_P: The number of decision variables (items).
+    :return: A new population of solutions.
+    """
+
+    def tournament_selection(individuals, rankings):
+        """
+        Select parents for crossover using tournament selection.
+        """
+        selected = []
+        for _ in range(POP_SIZE):
+            i, j = np.random.choice(range(POP_SIZE), 2, replace=False)
+            selected.append(individuals[i] if rankings[i] < rankings[j] else individuals[j])
+        return np.array(selected)
+
+    def crossover(parent1, parent2):
+        """
+        Perform crossover between two parents to produce two offspring.
+        """
+        cross_point = np.random.randint(1, N_P)
+        offspring1 = np.concatenate((parent1[:cross_point], parent2[cross_point:]))
+        offspring2 = np.concatenate((parent2[:cross_point], parent1[cross_point:]))
+        return offspring1, offspring2
+
+    def mutate(offspring):
+        """
+        Mutate an offspring by flipping a bit with a low probability.
+        """
+        mutation_prob = 1.0 / N_P
+        for i in range(N_P):
+            if np.random.rand() < mutation_prob:
+                offspring[i] = 1 - offspring[i]
+        return offspring
+
+    def repair(individual):
+        """
+        Repair an individual if it violates the knapsack capacity constraint.
+        """
+        while np.dot(individual, W) > C:
+            # Randomly drop items until the weight is within the capacity.
+            overweight_items = np.where((individual == 1) & (W > 0))[0]
+            if overweight_items.size == 0:
+                break
+            drop_idx = np.random.choice(overweight_items)
+            individual[drop_idx] = 0
+        return individual
+
+    # Selection
+    parents = tournament_selection(pops['individuals'], pops['rankings'])
+
+    # Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        offspring1, offspring2 = crossover(parents[i], parents[(i + 1) % POP_SIZE])
+        new_pop.append(offspring1)
+        new_pop.append(offspring2)
+
+    # Mutation and Repair
+    for i in range(POP_SIZE):
+        new_pop[i] = mutate(new_pop[i])
+        new_pop[i] = repair(new_pop[i])
+
+    # Ensure the new population size matches POP_SIZE
+    new_pop = new_pop[:POP_SIZE]
+
+    return np.array(new_pop, dtype=np.int32)
+
+[2025-01-21 18:43:53,100][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Generate the next generation of individuals for a multi-objective knapsack problem.
+
+    :param pops: The current population and their rankings.
+    :param W: The weights of items.
+    :param C: The capacity of the knapsack.
+    :param V: The profits of items.
+    :param POP_SIZE: The size of the population.
+    :param N_P: The number of decision variables (items).
+    :return: The new population as a numpy.ndarray.
+    """
+
+    def tournament_selection(pops, k=2):
+        selected = []
+        for _ in range(POP_SIZE // 2):
+            aspirants = np.random.choice(POP_SIZE, k, replace=False)
+            best = min(aspirants, key=lambda x: pops['rankings'][x])
+            selected.append(pops['individuals'][best])
+        return np.array(selected)
+
+    def crossover(parent1, parent2):
+        cross_point = np.random.randint(1, N_P - 1)
+        child1 = np.concatenate([parent1[:cross_point], parent2[cross_point:]])
+        child2 = np.concatenate([parent2[:cross_point], parent1[cross_point:]])
+        return child1, child2
+
+    def mutate(individual, mutation_rate=0.01):
+        for i in range(N_P):
+            if np.random.rand() < mutation_rate:
+                individual[i] = 1 - individual[i]
+        return individual
+
+    def repair(individual):
+        while np.dot(individual, W) > C:
+            overweight_items = np.where((individual == 1) & (W > 0))[0]
+            if overweight_items.size == 0:
+                break
+            item_to_remove = np.random.choice(overweight_items)
+            individual[item_to_remove] = 0
+        return individual
+
+    # Selection
+    selected_parents = tournament_selection(pops)
+
+    # Crossover
+    new_pop = []
+    for i in range(0, len(selected_parents), 2):
+        parent1, parent2 = selected_parents[i], selected_parents[i+1]
+        child1, child2 = crossover(parent1, parent2)
+        new_pop.extend([child1, child2])
+
+    new_pop = np.array(new_pop)
+
+    # Mutation
+    new_pop = np.array([mutate(individual) for individual in new_pop])
+
+    # Repair and Checking
+    new_pop = np.array([repair(individual) for individual in new_pop], dtype=np.int32)
+
+    return new_pop
+
+[2025-01-21 18:46:37,689][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Generate the next population for the multi-objective knapsack problem using evolutionary strategies.
+
+    :param pops: Current population and rankings.
+    :param W: Weights of items.
+    :param C: Maximum weight capacity of the knapsack.
+    :param V: Profit values for the items.
+    :param POP_SIZE: Number of individuals in each population.
+    :param N_P: Number of decision variables.
+    :return: New population that may achieve superior results on the multi-objective knapsack problems.
+    """
+    
+    def tournament_selection(rankings, k=2):
+        """
+        Perform tournament selection based on rankings.
+        :param rankings: Rankings of the individuals.
+        :param k: Tournament size.
+        :return: Indices of selected parents.
+        """
+        selected_indices = []
+        for _ in range(POP_SIZE // 2):
+            participants = np.random.choice(POP_SIZE, k, replace=False)
+            winner = participants[np.argmin(rankings[participants])]
+            selected_indices.append(winner)
+        return selected_indices
+
+    def crossover(parent1, parent2):
+        """
+        Perform uniform crossover between two parents.
+        :param parent1: First parent individual.
+        :param parent2: Second parent individual.
+        :return: Two offspring individuals.
+        """
+        mask = np.random.rand(N_P) < 0.5
+        offspring1 = np.where(mask, parent1, parent2)
+        offspring2 = np.where(mask, parent2, parent1)
+        return offspring1, offspring2
+
+    def mutate(individual, mutation_rate=0.1):
+        """
+        Mutate an individual by flipping bits with a certain probability.
+        :param individual: Individual to mutate.
+        :param mutation_rate: Mutation rate.
+        :return: Mutated individual.
+        """
+        mutation_mask = np.random.rand(N_P) < mutation_rate
+        individual[mutation_mask] = 1 - individual[mutation_mask]
+        return individual
+
+    def repair(individual):
+        """
+        Repair an individual if it violates the weight constraint.
+        :param individual: Individual to repair.
+        :return: Repaired individual.
+        """
+        while np.dot(individual, W) > C:
+            overweight_items = np.where((individual == 1) & (W > 0))[0]
+            item_to_remove = np.random.choice(overweight_items)
+            individual[item_to_remove] = 0
+        return individual
+
+    # Subsection Selection
+    parent_indices = tournament_selection(pops['rankings'])
+    parents = pops['individuals'][parent_indices]
+
+    # Subsection Crossover
+    new_pop = np.empty((POP_SIZE, N_P), dtype=np.int32)
+    for i in range(0, POP_SIZE, 2):
+        parent1, parent2 = parents[i // 2], parents[(i // 2 + 1) % (POP_SIZE // 2)]
+        offspring1, offspring2 = crossover(parent1, parent2)
+        new_pop[i], new_pop[i + 1] = offspring1, offspring2
+
+    # Subsection Mutation
+    for i in range(POP_SIZE):
+        new_pop[i] = mutate(new_pop[i])
+
+    # Subsection Checking
+    for i in range(POP_SIZE):
+        new_pop[i] = repair(new_pop[i])
+
+    return new_pop
+
+[2025-01-21 18:49:34,877][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: {}, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Evolves the current population to the next generation for the multi-objective knapsack problem.
+    """
+    
+    def tournament_selection(rankings, k=3):
+        """
+        Tournament selection based on rankings.
+        """
+        best = None
+        for i in range(k):
+            ind = np.random.randint(0, len(rankings))
+            if best is None or rankings[ind] < rankings[best]:
+                best = ind
+        return best
+    
+    def crossover(parent1, parent2):
+        """
+        Single point crossover.
+        """
+        point = np.random.randint(1, N_P)
+        child1 = np.concatenate((parent1[:point], parent2[point:]))
+        child2 = np.concatenate((parent2[:point], parent1[point:]))
+        return child1, child2
+    
+    def mutate(individual, mutation_rate=0.1):
+        """
+        Mutate an individual by flipping bits with a given mutation rate.
+        """
+        for i in range(N_P):
+            if np.random.rand() < mutation_rate:
+                individual[i] = 1 - individual[i]
+        return individual
+    
+    def repair(individual):
+        """
+        Repair an individual if it exceeds the weight limit.
+        """
+        while np.dot(individual, W) > C:
+            # Randomly remove items until the weight is under the limit
+            overweight_items = np.where((individual * W) > 0)[0]
+            item_to_remove = np.random.choice(overweight_items)
+            individual[item_to_remove] = 0
+        return individual
+    
+    # Subsection Selection
+    selected_indices = [tournament_selection(pops['rankings']) for _ in range(POP_SIZE)]
+    selected_parents = pops['individuals'][selected_indices]
+    
+    # Subsection Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE, 2):
+        parent1, parent2 = selected_parents[i], selected_parents[i+1]
+        child1, child2 = crossover(parent1, parent2)
+        new_pop.append(child1)
+        new_pop.append(child2)
+    
+    # Subsection Mutation
+    new_pop = [mutate(individual) for individual in new_pop]
+    
+    # Subsection Checking and Repairing
+    new_pop = np.array([repair(individual) for individual in new_pop], dtype=np.int32)
+    
+    return new_pop
+
+[2025-01-21 18:51:04,668][LLM_CodeGen_OP.py][line:106][INFO] 
+import numpy as np
+
+def next_generation(pops: dict, W: np.ndarray, C: int, V: np.ndarray, POP_SIZE: int, N_P: int):
+    """
+    Generate the next generation of individuals for a multi-objective knapsack problem.
+
+    :param pops: Current population and rankings
+    :param W: Weights of items
+    :param C: Capacity of the knapsack
+    :param V: Profits of items
+    :param POP_SIZE: Population size
+    :param N_P: Number of decision variables
+    :return: New population as a numpy.ndarray
+    """
+
+    def tournament_selection(pop, rankings, k=2):
+        selected = []
+        for _ in range(POP_SIZE // 2):
+            participants = np.random.choice(POP_SIZE, k, replace=False)
+            winner = participants[np.argmin(rankings[participants])]
+            selected.append(pop[winner])
+        return np.array(selected)
+
+    def crossover(parent1, parent2):
+        # Single-point crossover
+        point = np.random.randint(1, N_P)
+        offspring1 = np.concatenate([parent1[:point], parent2[point:]])
+        offspring2 = np.concatenate([parent2[:point], parent1[point:]])
+        return offspring1, offspring2
+
+    def mutate(individual, mutation_rate=0.1):
+        for i in range(N_P):
+            if np.random.rand() < mutation_rate:
+                individual[i] = 1 - individual[i]
+        return individual
+
+    def repair(individual):
+        while np.dot(individual, W) > C:
+            # Randomly remove items until the weight is less than capacity
+            overweight_items = np.where((individual == 1) & (W > 0))[0]
+            if overweight_items.size == 0:
+                break
+            individual[np.random.choice(overweight_items)] = 0
+        return individual
+
+    # Selection
+    selected_parents = tournament_selection(pops['individuals'], pops['rankings'])
+
+    # Crossover
+    new_pop = []
+    for i in range(0, POP_SIZE // 2, 2):
+        offspring1, offspring2 = crossover(selected_parents[i], selected_parents[i+1])
+        new_pop.extend([offspring1, offspring2])
+
+    # Mutation and Repair
+    new_pop = [mutate(individual) for individual in new_pop]
+    new_pop = [repair(individual) for individual in new_pop]
+
+    # Checking and returning new population
+    new_pop = np.clip(new_pop, 0, 1).astype(np.int32)
+    return np.array(new_pop)
+
+
+[2025-01-21 18:51:04,671][interaction.py][line:70][INFO] evolving-----------------------------------
+[2025-01-22 00:19:33,256][interaction.py][line:130][INFO] finish
